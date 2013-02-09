@@ -48,9 +48,12 @@ $(LOCAL_BUILT_MODULE) : $(TOPDIR)sdk/monitor/monitor \
 		  cat ../../$(RCP_LOG_FILE) ; \
 		  exit 1 ; \
 		fi
-	$(hide)if [[ $(HOST_OS) == "linux" ]]; then \
+	$(hide)if [[ $(HOST_OS)-$(HOST_ARCH) == "linux-x86" ]]; then \
 		$(call mk-rcp-monitor-atree-file,linux.gtk,x86)    ; \
 		$(call mk-rcp-monitor-atree-file,linux.gtk,x86_64) ; \
+	elif [[ $(HOST_OS)-$(HOST_ARCH) == "linux-ppc" ]]; then \
+		$(call mk-rcp-monitor-atree-file,linux.gtk,ppc)    ; \
+		$(call mk-rcp-monitor-atree-file,linux.gtk,ppc64) ; \
 	elif [[ $(HOST_OS) == "darwin" ]]; then \
 		$(call mk-rcp-monitor-atree-file,macosx.cocoa,x86_64) ; \
 	elif [[ $(HOST_OS) == "windows" ]]; then \
