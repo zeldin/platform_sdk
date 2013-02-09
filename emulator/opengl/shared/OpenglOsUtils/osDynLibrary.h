@@ -59,9 +59,9 @@ private:
 #  define DLL_EXTENSION  ".so"
 #endif
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__powerpc64__)
 #  define EMUGL_LIBNAME(name) "lib64" name DLL_EXTENSION
-#elif defined(__i386__)
+#elif defined(__i386__) || defined(__powerpc__)
 #  define EMUGL_LIBNAME(name) "lib" name DLL_EXTENSION
 #else
 /* This header is included by target w/o using EMUGL_LIBNAME().  Don't #error, leave it undefined */
