@@ -71,8 +71,8 @@
         <mkdir dir="${targetDir}/deltapack" />
         <mkdir dir="${targetDir}/repos" />
 
-        <unzip src="${targetSrcDir}/deltapack/eclipse-3.7.2-delta-pack.zip" dest="${targetDir}/deltapack" overwrite="false" />
-        <unzip src="${targetSrcDir}/platform/org.eclipse.platform-3.7.2.zip" dest="${targetDir}/repos/platform" overwrite="false" />
+        <unzip src="${targetSrcDir}/deltapack/eclipse-M20130124-1500-delta-pack.zip" dest="${targetDir}/deltapack" overwrite="false" />
+        <unzip src="${targetSrcDir}/platform/org.eclipse.platform-M20130124-1500.zip" dest="${targetDir}/repos/platform" overwrite="false" />
     </target>
 
     <!-- Launch pde build -->
