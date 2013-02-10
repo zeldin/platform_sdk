@@ -39,7 +39,7 @@ $(LOCAL_BUILT_MODULE) : $(TOPDIR)sdk/monitor/monitor \
 			org.eclipse.equinox.launcher.Main \
 			-application org.eclipse.ant.core.antRunner \
 			-configuration ../../out/host/eclipse/rcp/build/configuration \
-			-DbuildFor=$(HOST_OS) 2>&1 && \
+			-DbuildFor=$(HOST_OS)-$(HOST_ARCH) 2>&1 && \
 		  mv -f ../../$(RCP_LOG_FILE) ../../$(RCP_LOG_FILE).1 ) \
 		| tee ../../$(RCP_LOG_FILE) \
 		| sed -E '/\[java\]/!d; /SUCCESSFUL/d ; s/^ +\[java\] //; /^ *$$/d; /:$$/d; /\[javac\] [^C]/d; s/^/monitor: /'; \

@@ -22,13 +22,16 @@
 
     <!-- Identify configurations to build -->
     <condition property="buildconfigs" value="linux,gtk,x86 &amp; linux,gtk,x86_64">
-        <equals arg1="${buildFor}" arg2="linux" />
+        <equals arg1="${buildFor}" arg2="linux-x86" />
+    </condition>
+    <condition property="buildconfigs" value="linux,gtk,ppc &amp; linux,gtk,ppc64">
+        <equals arg1="${buildFor}" arg2="linux-ppc" />
     </condition>
     <condition property="buildconfigs" value="macosx,cocoa,x86_64">
-        <equals arg1="${buildFor}" arg2="darwin" />
+        <matches string="${buildFor}" pattern="^darwin-" />
     </condition>
     <condition property="buildconfigs" value="win32,win32,x86 &amp; win32,win32,x86_64">
-        <equals arg1="${buildFor}" arg2="windows" />
+        <matches string="${buildFor}" pattern="^windows-" />
     </condition>
 
     <!-- if no platforms are provided, then build for all platforms -->
