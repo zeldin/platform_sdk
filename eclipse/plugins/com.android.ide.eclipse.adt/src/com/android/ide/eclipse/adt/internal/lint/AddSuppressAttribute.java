@@ -22,13 +22,13 @@ import static com.android.SdkConstants.DOT_XML;
 
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
+import com.android.ide.common.sdk.SdkVersionInfo;
 import com.android.ide.eclipse.adt.AdtPlugin;
 import com.android.ide.eclipse.adt.AdtUtils;
 import com.android.ide.eclipse.adt.internal.editors.AndroidXmlEditor;
 import com.android.ide.eclipse.adt.internal.editors.IconFactory;
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.DomUtilities;
 import com.android.tools.lint.checks.ApiDetector;
-import com.android.tools.lint.detector.api.LintUtils;
 import com.google.common.collect.Lists;
 
 import org.eclipse.core.resources.IMarker;
@@ -177,7 +177,8 @@ class AddSuppressAttribute implements ICompletionProposal {
         fixes.add(new AddSuppressAttribute(editor, id, marker, element, desc, null));
 
         int api = -1;
-        if (id.equals(ApiDetector.UNSUPPORTED.getId())) {
+        if (id.equals(ApiDetector.UNSUPPORTED.getId())
+                || id.equals(ApiDetector.INLINED.getId())) {
             String message = marker.getAttribute(IMarker.MESSAGE, null);
             if (message != null) {
                 Pattern pattern = Pattern.compile("\\s(\\d+)\\s"); //$NON-NLS-1$
@@ -185,7 +186,7 @@ class AddSuppressAttribute implements ICompletionProposal {
                 if (matcher.find()) {
                     api = Integer.parseInt(matcher.group(1));
                     String targetApi;
-                    String buildCode = LintUtils.getBuildCode(api);
+                    String buildCode = SdkVersionInfo.getBuildCode(api);
                     if (buildCode != null) {
                         targetApi = buildCode.toLowerCase(Locale.US);
                         fixes.add(new AddSuppressAttribute(editor, id, marker, element,

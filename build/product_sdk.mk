@@ -33,14 +33,11 @@ PRODUCT_PACKAGES += \
 	anttasks \
 	archquery \
 	assetstudio \
-	common-tests \
 	ddmlib \
-	ddmlib-tests \
 	ddms \
 	ddmuilib \
 	draw9patch \
 	dvlib \
-	dvlib-tests \
 	hierarchyviewer \
 	sdk_common \
 	layoutlib_api \
@@ -52,11 +49,9 @@ PRODUCT_PACKAGES += \
 	ninepatch-tests \
 	rule_api \
 	sdklib \
-	sdklib-tests \
 	sdkmanager \
 	sdkstats \
 	sdkuilib \
-	sdkuilib-tests \
 	swtmenubar \
 	traceview \
 	uiautomatorviewer \

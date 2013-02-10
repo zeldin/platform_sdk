@@ -60,6 +60,19 @@ public class ApiDetectorTest extends AbstractCheckTest {
                 ));
     }
 
+    public void testAttrWithoutSlash() throws Exception {
+        assertEquals(""
+                + "res/layout/divider.xml:7: Error: ?android:dividerHorizontal requires API level 11 (current min is 1) [NewApi]\n"
+                + "    android:divider=\"?android:dividerHorizontal\"\n"
+                + "    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "1 errors, 0 warnings\n",
+
+                lintProject(
+                        "apicheck/minsdk1.xml=>AndroidManifest.xml",
+                        "apicheck/divider.xml=>res/layout/divider.xml"
+                ));
+    }
+
     public void testXmlApi14() throws Exception {
         assertEquals(
                 "No warnings.",
@@ -138,14 +151,14 @@ public class ApiDetectorTest extends AbstractCheckTest {
             "              ~~~~~~~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:33: Error: Field requires API level 11 (current min is 1): dalvik.bytecode.OpcodeInfo#MAXIMUM_VALUE [NewApi]\n" +
             "  int field = OpcodeInfo.MAXIMUM_VALUE; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                         ~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:38: Error: Field requires API level 14 (current min is 1): android.app.ApplicationErrorReport#batteryInfo [NewApi]\n" +
             "  BatteryInfo batteryInfo = getReport().batteryInfo;\n" +
             "              ~~~~~~~~~~~\n" +
             //             Note: the above error range is wrong; should be pointing to the second
             "src/foo/bar/ApiCallTest.java:41: Error: Field requires API level 11 (current min is 1): android.graphics.PorterDuff.Mode#OVERLAY [NewApi]\n" +
             "  Mode mode = PorterDuff.Mode.OVERLAY; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                              ~~~~~~~\n" +
             "7 errors, 0 warnings\n",
 
             lintProject(
@@ -172,13 +185,13 @@ public class ApiDetectorTest extends AbstractCheckTest {
             "              ~~~~~~~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:33: Error: Field requires API level 11 (current min is 2): dalvik.bytecode.OpcodeInfo#MAXIMUM_VALUE [NewApi]\n" +
             "  int field = OpcodeInfo.MAXIMUM_VALUE; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                         ~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:38: Error: Field requires API level 14 (current min is 2): android.app.ApplicationErrorReport#batteryInfo [NewApi]\n" +
             "  BatteryInfo batteryInfo = getReport().batteryInfo;\n" +
             "              ~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:41: Error: Field requires API level 11 (current min is 2): android.graphics.PorterDuff.Mode#OVERLAY [NewApi]\n" +
             "  Mode mode = PorterDuff.Mode.OVERLAY; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                              ~~~~~~~\n" +
             "7 errors, 0 warnings\n",
 
             lintProject(
@@ -202,13 +215,13 @@ public class ApiDetectorTest extends AbstractCheckTest {
             "              ~~~~~~~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:33: Error: Field requires API level 11 (current min is 4): dalvik.bytecode.OpcodeInfo#MAXIMUM_VALUE [NewApi]\n" +
             "  int field = OpcodeInfo.MAXIMUM_VALUE; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                         ~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:38: Error: Field requires API level 14 (current min is 4): android.app.ApplicationErrorReport#batteryInfo [NewApi]\n" +
             "  BatteryInfo batteryInfo = getReport().batteryInfo;\n" +
             "              ~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:41: Error: Field requires API level 11 (current min is 4): android.graphics.PorterDuff.Mode#OVERLAY [NewApi]\n" +
             "  Mode mode = PorterDuff.Mode.OVERLAY; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                              ~~~~~~~\n" +
             "6 errors, 0 warnings\n",
 
             lintProject(
@@ -229,13 +242,13 @@ public class ApiDetectorTest extends AbstractCheckTest {
             "              ~~~~~~~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:33: Error: Field requires API level 11 (current min is 10): dalvik.bytecode.OpcodeInfo#MAXIMUM_VALUE [NewApi]\n" +
             "  int field = OpcodeInfo.MAXIMUM_VALUE; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                         ~~~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:38: Error: Field requires API level 14 (current min is 10): android.app.ApplicationErrorReport#batteryInfo [NewApi]\n" +
             "  BatteryInfo batteryInfo = getReport().batteryInfo;\n" +
             "              ~~~~~~~~~~~\n" +
             "src/foo/bar/ApiCallTest.java:41: Error: Field requires API level 11 (current min is 10): android.graphics.PorterDuff.Mode#OVERLAY [NewApi]\n" +
             "  Mode mode = PorterDuff.Mode.OVERLAY; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                              ~~~~~~~\n" +
             "5 errors, 0 warnings\n",
 
             lintProject(
@@ -366,13 +379,13 @@ public class ApiDetectorTest extends AbstractCheckTest {
             "              ~~~~~~~~~~~~~~~~~~~\n" +
             "src/foo/bar/SuppressTest1.java:89: Error: Field requires API level 11 (current min is 1): dalvik.bytecode.OpcodeInfo#MAXIMUM_VALUE [NewApi]\n" +
             "  int field = OpcodeInfo.MAXIMUM_VALUE; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                         ~~~~~~~~~~~~~\n" +
             "src/foo/bar/SuppressTest1.java:94: Error: Field requires API level 14 (current min is 1): android.app.ApplicationErrorReport#batteryInfo [NewApi]\n" +
             "  BatteryInfo batteryInfo = getReport().batteryInfo;\n" +
             "              ~~~~~~~~~~~\n" +
             "src/foo/bar/SuppressTest1.java:97: Error: Field requires API level 11 (current min is 1): android.graphics.PorterDuff.Mode#OVERLAY [NewApi]\n" +
             "  Mode mode = PorterDuff.Mode.OVERLAY; // API 11\n" +
-            "              ~~~~~~~~~~~~~~~~~~~~~~~\n" +
+            "                              ~~~~~~~\n" +
 
             // Note: These annotations are within the methods, not ON the methods, so they have
             // no effect (because they don't end up in the bytecode)
@@ -719,64 +732,64 @@ public class ApiDetectorTest extends AbstractCheckTest {
 
     public void testJavaConstants() throws Exception {
         assertEquals(""
-                + "src/test/pkg/ApiSourceCheck.java:5: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:5: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "import static android.view.View.MEASURED_STATE_MASK;\n"
                 + "              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:30: Error: Field requires API level 11 (current min is 1): android.widget.ZoomControls#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:30: Warning: Field requires API level 11 (current min is 1): android.widget.ZoomControls#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "        int x = MEASURED_STATE_MASK;\n"
                 + "                ~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:33: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:33: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "        int y = android.view.View.MEASURED_STATE_MASK;\n"
                 + "                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:36: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:36: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "        int z = View.MEASURED_STATE_MASK;\n"
                 + "                ~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:37: Error: Field requires API level 14 (current min is 1): android.view.View#FIND_VIEWS_WITH_TEXT [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:37: Warning: Field requires API level 14 (current min is 1): android.view.View#FIND_VIEWS_WITH_TEXT [InlinedApi]\n"
                 + "        int find2 = View.FIND_VIEWS_WITH_TEXT; // requires API 14\n"
                 + "                    ~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:40: Error: Field requires API level 12 (current min is 1): android.app.ActivityManager#MOVE_TASK_NO_USER_ACTION [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:40: Warning: Field requires API level 12 (current min is 1): android.app.ActivityManager#MOVE_TASK_NO_USER_ACTION [InlinedApi]\n"
                 + "        int w = ActivityManager.MOVE_TASK_NO_USER_ACTION;\n"
                 + "                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:41: Error: Field requires API level 14 (current min is 1): android.widget.ZoomButton#FIND_VIEWS_WITH_CONTENT_DESCRIPTION [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:41: Warning: Field requires API level 14 (current min is 1): android.widget.ZoomButton#FIND_VIEWS_WITH_CONTENT_DESCRIPTION [InlinedApi]\n"
                 + "        int find1 = ZoomButton.FIND_VIEWS_WITH_CONTENT_DESCRIPTION; // requires\n"
                 + "                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:44: Error: Field requires API level 9 (current min is 1): android.widget.ZoomControls#OVER_SCROLL_ALWAYS [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:44: Warning: Field requires API level 9 (current min is 1): android.widget.ZoomControls#OVER_SCROLL_ALWAYS [InlinedApi]\n"
                 + "        int overScroll = OVER_SCROLL_ALWAYS; // requires API 9\n"
                 + "                         ~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:47: Error: Field requires API level 16 (current min is 1): android.widget.ZoomControls#IMPORTANT_FOR_ACCESSIBILITY_AUTO [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:47: Warning: Field requires API level 16 (current min is 1): android.widget.ZoomControls#IMPORTANT_FOR_ACCESSIBILITY_AUTO [InlinedApi]\n"
                 + "        int auto = IMPORTANT_FOR_ACCESSIBILITY_AUTO; // requires API 16\n"
                 + "                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:51: Error: Field requires API level 14 (current min is 1): android.widget.ZoomButton#ROTATION_X [NewApi]\n"
-                + "        Object rotationX = ZoomButton.ROTATION_X; // Requires API 14\n"
-                + "                           ~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:54: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:54: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "        return (child.getMeasuredWidth() & View.MEASURED_STATE_MASK)\n"
                 + "                                           ~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:55: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_HEIGHT_STATE_SHIFT [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:55: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_HEIGHT_STATE_SHIFT [InlinedApi]\n"
                 + "                | ((child.getMeasuredHeight() >> View.MEASURED_HEIGHT_STATE_SHIFT) & (View.MEASURED_STATE_MASK >> View.MEASURED_HEIGHT_STATE_SHIFT));\n"
                 + "                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:55: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_HEIGHT_STATE_SHIFT [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:55: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_HEIGHT_STATE_SHIFT [InlinedApi]\n"
                 + "                | ((child.getMeasuredHeight() >> View.MEASURED_HEIGHT_STATE_SHIFT) & (View.MEASURED_STATE_MASK >> View.MEASURED_HEIGHT_STATE_SHIFT));\n"
                 + "                                                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:55: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:55: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "                | ((child.getMeasuredHeight() >> View.MEASURED_HEIGHT_STATE_SHIFT) & (View.MEASURED_STATE_MASK >> View.MEASURED_HEIGHT_STATE_SHIFT));\n"
                 + "                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:90: Error: Field requires API level 8 (current min is 1): android.R.id#custom [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:90: Warning: Field requires API level 8 (current min is 1): android.R.id#custom [InlinedApi]\n"
                 + "        int custom = android.R.id.custom; // API 8\n"
                 + "                     ~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:94: Error: Field requires API level 13 (current min is 1): android.Manifest.permission#SET_POINTER_SPEED [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:94: Warning: Field requires API level 13 (current min is 1): android.Manifest.permission#SET_POINTER_SPEED [InlinedApi]\n"
                 + "        String setPointerSpeed = permission.SET_POINTER_SPEED;\n"
                 + "                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:95: Error: Field requires API level 13 (current min is 1): android.Manifest.permission#SET_POINTER_SPEED [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:95: Warning: Field requires API level 13 (current min is 1): android.Manifest.permission#SET_POINTER_SPEED [InlinedApi]\n"
                 + "        String setPointerSpeed2 = Manifest.permission.SET_POINTER_SPEED;\n"
                 + "                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:120: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:120: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "        int y = View.MEASURED_STATE_MASK; // Not OK\n"
                 + "                ~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "src/test/pkg/ApiSourceCheck.java:121: Error: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [NewApi]\n"
+                + "src/test/pkg/ApiSourceCheck.java:121: Warning: Field requires API level 11 (current min is 1): android.view.View#MEASURED_STATE_MASK [InlinedApi]\n"
                 + "        testBenignUsages(View.MEASURED_STATE_MASK); // Not OK\n"
                 + "                         ~~~~~~~~~~~~~~~~~~~~~~~~\n"
-                + "19 errors, 0 warnings\n",
+                + "src/test/pkg/ApiSourceCheck.java:51: Error: Field requires API level 14 (current min is 1): android.widget.ZoomButton#ROTATION_X [NewApi]\n"
+                + "        Object rotationX = ZoomButton.ROTATION_X; // Requires API 14\n"
+                + "                                      ~~~~~~~~~~\n"
+                + "1 errors, 18 warnings\n",
 
                 lintProject(
                         "apicheck/classpath=>.classpath",
@@ -784,6 +797,104 @@ public class ApiDetectorTest extends AbstractCheckTest {
                         "project.properties1=>project.properties",
                         "apicheck/ApiSourceCheck.java.txt=>src/test/pkg/ApiSourceCheck.java",
                         "apicheck/ApiSourceCheck.class.data=>bin/classes/test/pkg/ApiSourceCheck.class"
+                ));
+    }
+
+    public void testStyleDeclaration() throws Exception {
+        assertEquals(""
+                + "res/values/styles2.xml:5: Error: android:actionBarStyle requires API level 11 (current min is 10) [NewApi]\n"
+                + "        <item name=\"android:actionBarStyle\">...</item>\n"
+                + "              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "1 errors, 0 warnings\n",
+
+                lintProject(
+                        "apicheck/classpath=>.classpath",
+                        "apicheck/minsdk10.xml=>AndroidManifest.xml",
+                        "project.properties1=>project.properties",
+                        "res/values/styles2.xml"
+                ));
+    }
+
+    public void testStyleDeclarationInV9() throws Exception {
+        assertEquals(""
+                + "res/values-v9/styles2.xml:5: Error: android:actionBarStyle requires API level 11 (current min is 10) [NewApi]\n"
+                + "        <item name=\"android:actionBarStyle\">...</item>\n"
+                + "              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "1 errors, 0 warnings\n",
+
+                lintProject(
+                        "apicheck/classpath=>.classpath",
+                        "apicheck/minsdk10.xml=>AndroidManifest.xml",
+                        "project.properties1=>project.properties",
+                        "res/values/styles2.xml=>res/values-v9/styles2.xml"
+                ));
+    }
+
+    public void testStyleDeclarationInV11() throws Exception {
+        assertEquals(
+                "No warnings.",
+
+                lintProject(
+                        "apicheck/classpath=>.classpath",
+                        "apicheck/minsdk10.xml=>AndroidManifest.xml",
+                        "project.properties1=>project.properties",
+                        "res/values/styles2.xml=>res/values-v11/styles2.xml"
+                ));
+    }
+
+    public void testStyleDeclarationInV14() throws Exception {
+        assertEquals(
+                "No warnings.",
+
+                lintProject(
+                        "apicheck/classpath=>.classpath",
+                        "apicheck/minsdk10.xml=>AndroidManifest.xml",
+                        "project.properties1=>project.properties",
+                        "res/values/styles2.xml=>res/values-v14/styles2.xml"
+                ));
+    }
+
+    public void testMovedConstants() throws Exception {
+        assertEquals(""
+                // These two constants were introduced in API 11; the other 3 were available
+                // on subclass ListView from API 1
+                + "src/test/pkg/ApiSourceCheck2.java:10: Warning: Field requires API level 11 (current min is 1): android.widget.AbsListView#CHOICE_MODE_MULTIPLE_MODAL [InlinedApi]\n"
+                + "        int mode2 = AbsListView.CHOICE_MODE_MULTIPLE_MODAL;\n"
+                + "                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "src/test/pkg/ApiSourceCheck2.java:14: Warning: Field requires API level 11 (current min is 1): android.widget.ListView#CHOICE_MODE_MULTIPLE_MODAL [InlinedApi]\n"
+                + "        int mode6 = ListView.CHOICE_MODE_MULTIPLE_MODAL;\n"
+                + "                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "0 errors, 2 warnings\n",
+
+                lintProject(
+                        "apicheck/classpath=>.classpath",
+                        "apicheck/minsdk1.xml=>AndroidManifest.xml",
+                        "project.properties1=>project.properties",
+                        "apicheck/ApiSourceCheck2.java.txt=>src/test/pkg/ApiSourceCheck2.java",
+                        "apicheck/ApiSourceCheck2.class.data=>bin/classes/test/pkg/ApiSourceCheck2.class"
+                ));
+    }
+
+    public void testInheritCompatLibrary() throws Exception {
+        assertEquals(""
+                + "src/test/pkg/MyActivityImpl.java:8: Error: Call requires API level 11 (current min is 1): android.app.Activity#isChangingConfigurations [NewApi]\n"
+                + "  boolean isChanging = super.isChangingConfigurations();\n"
+                + "                             ~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "src/test/pkg/MyActivityImpl.java:13: Error: Call requires API level 11 (current min is 1): android.app.Activity#isChangingConfigurations [NewApi]\n"
+                + "  return super.isChangingConfigurations();\n"
+                + "               ~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "src/test/pkg/MyActivityImpl.java:12: Error: This method is not overriding anything with the current build target, but will in API level 11 (current target is 3): test.pkg.MyActivityImpl#isChangingConfigurations [Override]\n"
+                + " public boolean isChangingConfigurations() {\n"
+                + "                ~~~~~~~~~~~~~~~~~~~~~~~~\n"
+                + "3 errors, 0 warnings\n",
+
+                lintProject(
+                        "apicheck/classpath=>.classpath",
+                        "apicheck/minsdk1.xml=>AndroidManifest.xml",
+                        "project.properties1=>project.properties",
+                        "apicheck/MyActivityImpl.java.txt=>src/test/pkg/MyActivityImpl.java",
+                        "apicheck/MyActivityImpl.class.data=>bin/classes/test/pkg/MyActivityImpl.class",
+                        "apicheck/android-support-v4.jar.data=>libs/android-support-v4.jar"
                 ));
     }
 }

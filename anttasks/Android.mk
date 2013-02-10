@@ -22,9 +22,11 @@ LOCAL_JAVA_RESOURCE_DIRS := src
 LOCAL_JAR_MANIFEST := etc/manifest.txt
 
 LOCAL_JAVA_LIBRARIES := \
+        common \
         sdklib \
         manifmerger \
-        ant
+        ant \
+        guava-tools
 
 LOCAL_MODULE := anttasks
 

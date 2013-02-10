@@ -32,6 +32,7 @@ import com.android.hierarchyviewerlib.actions.InvalidateAction;
 import com.android.hierarchyviewerlib.actions.LoadOverlayAction;
 import com.android.hierarchyviewerlib.actions.LoadViewHierarchyAction;
 import com.android.hierarchyviewerlib.actions.PixelPerfectAutoRefreshAction;
+import com.android.hierarchyviewerlib.actions.ProfileNodesAction;
 import com.android.hierarchyviewerlib.actions.RefreshPixelPerfectAction;
 import com.android.hierarchyviewerlib.actions.RefreshPixelPerfectTreeAction;
 import com.android.hierarchyviewerlib.actions.RefreshViewAction;
@@ -39,13 +40,14 @@ import com.android.hierarchyviewerlib.actions.RefreshWindowsAction;
 import com.android.hierarchyviewerlib.actions.RequestLayoutAction;
 import com.android.hierarchyviewerlib.actions.SavePixelPerfectAction;
 import com.android.hierarchyviewerlib.actions.SaveTreeViewAction;
-import com.android.hierarchyviewerlib.device.DeviceBridge.ViewServerInfo;
+import com.android.hierarchyviewerlib.device.IHvDevice;
 import com.android.hierarchyviewerlib.models.DeviceSelectionModel;
 import com.android.hierarchyviewerlib.models.PixelPerfectModel;
 import com.android.hierarchyviewerlib.models.PixelPerfectModel.IImageChangeListener;
 import com.android.hierarchyviewerlib.models.TreeViewModel;
 import com.android.hierarchyviewerlib.models.TreeViewModel.ITreeChangeListener;
 import com.android.hierarchyviewerlib.ui.DeviceSelector;
+import com.android.hierarchyviewerlib.ui.InvokeMethodPrompt;
 import com.android.hierarchyviewerlib.ui.LayoutViewer;
 import com.android.hierarchyviewerlib.ui.PixelPerfect;
 import com.android.hierarchyviewerlib.ui.PixelPerfectControls;
@@ -126,6 +128,7 @@ public class HierarchyViewerApplication extends ApplicationWindow {
     private LayoutViewer mLayoutViewer;
     private PixelPerfectLoupe mPixelPerfectLoupe;
     private Composite mTreeViewControls;
+    private InvokeMethodPrompt mInvokeMethodPrompt;
 
     private ActionButton dumpDisplayList;
 
@@ -372,7 +375,7 @@ public class HierarchyViewerApplication extends ApplicationWindow {
 
         Composite innerButtonPanel = new Composite(buttonPanel, SWT.NONE);
         innerButtonPanel.setLayoutData(new GridData(GridData.FILL_VERTICAL));
-        GridLayout innerButtonPanelLayout = new GridLayout(7, true);
+        GridLayout innerButtonPanelLayout = new GridLayout(8, true);
         innerButtonPanelLayout.marginWidth = innerButtonPanelLayout.marginHeight = 2;
         innerButtonPanelLayout.horizontalSpacing = innerButtonPanelLayout.verticalSpacing = 2;
         innerButtonPanel.setLayout(innerButtonPanelLayout);
@@ -404,6 +407,10 @@ public class HierarchyViewerApplication extends ApplicationWindow {
                 new ActionButton(innerButtonPanel, DumpDisplayListAction.getAction());
         dumpDisplayList.setLayoutData(new GridData(GridData.FILL_BOTH));
 
+        ActionButton profileNodes =
+                new ActionButton(innerButtonPanel, ProfileNodesAction.getAction());
+        profileNodes.setLayoutData(new GridData(GridData.FILL_BOTH));
+
         SashForm mainSash = new SashForm(mTreeViewPanel, SWT.HORIZONTAL | SWT.SMOOTH);
         mainSash.setLayoutData(new GridData(GridData.FILL_BOTH));
         Composite treeViewContainer = new Composite(mainSash, SWT.BORDER);
@@ -422,8 +429,13 @@ public class HierarchyViewerApplication extends ApplicationWindow {
         new TreeViewOverview(treeViewOverviewContainer);
 
         Composite propertyViewerContainer = new Composite(sideSash, SWT.BORDER);
-        propertyViewerContainer.setLayout(new FillLayout());
-        new PropertyViewer(propertyViewerContainer);
+        propertyViewerContainer.setLayout(new GridLayout());
+
+        PropertyViewer pv = new PropertyViewer(propertyViewerContainer);
+        pv.setLayoutData(new GridData(GridData.FILL_BOTH));
+
+        mInvokeMethodPrompt = new InvokeMethodPrompt(propertyViewerContainer);
+        mInvokeMethodPrompt.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         Composite layoutViewerContainer = new Composite(sideSash, SWT.NONE);
         GridLayout layoutViewerLayout = new GridLayout();
@@ -669,9 +681,9 @@ public class HierarchyViewerApplication extends ApplicationWindow {
         treeViewMenu.add(new Separator());
         treeViewMenu.add(RefreshViewAction.getAction());
         treeViewMenu.add(DisplayViewAction.getAction(getShell()));
-        // Only make the DumpDisplayList action visible if the protocol supports it.
-        ViewServerInfo info = DeviceSelectionModel.getModel().getSelectedDeviceInfo();
-        if (info != null && info.protocolVersion >= 4) {
+
+        IHvDevice hvDevice = DeviceSelectionModel.getModel().getSelectedDevice();
+        if (hvDevice.supportsDisplayListDump()) {
             treeViewMenu.add(DumpDisplayListAction.getAction());
             dumpDisplayList.setVisible(true);
         } else {
@@ -688,6 +700,8 @@ public class HierarchyViewerApplication extends ApplicationWindow {
 
         mTreeViewButton.setSelection(true);
         mTreeViewButton.setImage(mTreeViewSelectedImage);
+
+        mInvokeMethodPrompt.setEnabled(hvDevice.isViewUpdateEnabled());
 
         mPixelPerfectButton.setSelection(false);
         mPixelPerfectButton.setImage(mPixelPerfectImage);

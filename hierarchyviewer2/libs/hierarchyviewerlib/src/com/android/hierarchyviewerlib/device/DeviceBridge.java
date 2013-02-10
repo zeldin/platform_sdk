@@ -23,6 +23,8 @@ import com.android.ddmlib.Log;
 import com.android.ddmlib.MultiLineReceiver;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.TimeoutException;
+import com.android.hierarchyviewerlib.models.ViewNode;
+import com.android.hierarchyviewerlib.models.Window;
 import com.android.hierarchyviewerlib.ui.util.PsdFile;
 
 import org.eclipse.swt.graphics.Image;
@@ -97,7 +99,7 @@ public class DeviceBridge {
      */
     public static void initDebugBridge(String adbLocation) {
         if (sBridge == null) {
-            AndroidDebugBridge.init(false /* debugger support */);
+            AndroidDebugBridge.init(true /* debugger support */);
         }
         if (sBridge == null || !sBridge.isConnected()) {
             sBridge = AndroidDebugBridge.createBridge(adbLocation, true);
@@ -353,7 +355,7 @@ public class DeviceBridge {
      * This loads the list of windows from the specified device. The format is:
      * hashCode1 title1 hashCode2 title2 ... hashCodeN titleN DONE.
      */
-    public static Window[] loadWindows(IDevice device) {
+    public static Window[] loadWindows(IHvDevice hvDevice, IDevice device) {
         ArrayList<Window> windows = new ArrayList<Window>();
         DeviceConnection connection = null;
         ViewServerInfo serverInfo = getViewServerInfo(device);
@@ -378,7 +380,7 @@ public class DeviceBridge {
                         id = Integer.parseInt(windowId, 16);
                     }
 
-                    Window w = new Window(device, line.substring(index + 1), id);
+                    Window w = new Window(hvDevice, line.substring(index + 1), id);
                     windows.add(w);
                 }
             }
@@ -387,7 +389,7 @@ public class DeviceBridge {
             // get the focused window, which was done using a special type of
             // window with hash code -1.
             if (serverInfo.protocolVersion < 3) {
-                windows.add(Window.getFocusedWindow(device));
+                windows.add(Window.getFocusedWindow(hvDevice));
             }
         } catch (Exception e) {
             Log.e(TAG, "Unable to load the window list from device " + device);
@@ -436,30 +438,7 @@ public class DeviceBridge {
             connection = new DeviceConnection(window.getDevice());
             connection.sendCommand("DUMP " + window.encode()); //$NON-NLS-1$
             BufferedReader in = connection.getInputStream();
-            ViewNode currentNode = null;
-            int currentDepth = -1;
-            String line;
-            while ((line = in.readLine()) != null) {
-                if ("DONE.".equalsIgnoreCase(line)) {
-                    break;
-                }
-                int depth = 0;
-                while (line.charAt(depth) == ' ') {
-                    depth++;
-                }
-                while (depth <= currentDepth) {
-                    currentNode = currentNode.parent;
-                    currentDepth--;
-                }
-                currentNode = new ViewNode(window, currentNode, line.substring(depth));
-                currentDepth = depth;
-            }
-            if (currentNode == null) {
-                return null;
-            }
-            while (currentNode.parent != null) {
-                currentNode = currentNode.parent;
-            }
+            ViewNode currentNode = parseViewHierarchy(in, window);
             ViewServerInfo serverInfo = getViewServerInfo(window.getDevice());
             if (serverInfo != null) {
                 currentNode.protocolVersion = serverInfo.protocolVersion;
@@ -475,6 +454,42 @@ public class DeviceBridge {
             }
         }
         return null;
+    }
+
+    public static ViewNode parseViewHierarchy(BufferedReader in, Window window) {
+        ViewNode currentNode = null;
+        int currentDepth = -1;
+        String line;
+        try {
+            while ((line = in.readLine()) != null) {
+                if ("DONE.".equalsIgnoreCase(line)) {
+                    break;
+                }
+                int depth = 0;
+                while (line.charAt(depth) == ' ') {
+                    depth++;
+                }
+                while (depth <= currentDepth) {
+                    if (currentNode != null) {
+                        currentNode = currentNode.parent;
+                    }
+                    currentDepth--;
+                }
+                currentNode = new ViewNode(window, currentNode, line.substring(depth));
+                currentDepth = depth;
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error reading view hierarchy stream: " + e.getMessage());
+            return null;
+        }
+        if (currentNode == null) {
+            return null;
+        }
+        while (currentNode.parent != null) {
+            currentNode = currentNode.parent;
+        }
+
+        return currentNode;
     }
 
     public static boolean loadProfileData(Window window, ViewNode viewNode) {
@@ -520,7 +535,7 @@ public class DeviceBridge {
         return true;
     }
 
-    private static boolean loadProfileDataRecursive(ViewNode node, BufferedReader in)
+    public static boolean loadProfileDataRecursive(ViewNode node, BufferedReader in)
             throws IOException {
         if (!loadProfileData(node, in)) {
             return false;
@@ -557,23 +572,14 @@ public class DeviceBridge {
 
         try {
             connection = new DeviceConnection(window.getDevice());
-
             connection.sendCommand("CAPTURE_LAYERS " + window.encode()); //$NON-NLS-1$
 
             in =
                     new DataInputStream(new BufferedInputStream(connection.getSocket()
                             .getInputStream()));
 
-            int width = in.readInt();
-            int height = in.readInt();
-
-            PsdFile psd = new PsdFile(width, height);
-
-            while (readLayer(in, psd)) {
-            }
-
-            return psd;
-        } catch (Exception e) {
+            return parsePsd(in);
+        } catch (IOException e) {
             Log.e(TAG, "Unable to capture layers for window " + window.getTitle() + " on device "
                     + window.getDevice());
         } finally {
@@ -583,10 +589,25 @@ public class DeviceBridge {
                 } catch (Exception ex) {
                 }
             }
-            connection.close();
+
+            if (connection != null) {
+                connection.close();
+            }
         }
 
         return null;
+    }
+
+    public static PsdFile parsePsd(DataInputStream in) throws IOException {
+        int width = in.readInt();
+        int height = in.readInt();
+
+        PsdFile psd = new PsdFile(width, height);
+
+        while (readLayer(in, psd)) {
+        }
+
+        return psd;
     }
 
     private static boolean readLayer(DataInputStream in, PsdFile psd) {
@@ -634,7 +655,9 @@ public class DeviceBridge {
             Log.e(TAG, "Unable to invalidate view " + viewNode + " in window " + viewNode.window
                     + " on device " + viewNode.window.getDevice());
         } finally {
-            connection.close();
+            if (connection != null) {
+                connection.close();
+            }
         }
     }
 
@@ -647,7 +670,9 @@ public class DeviceBridge {
             Log.e(TAG, "Unable to request layout for node " + viewNode + " in window "
                     + viewNode.window + " on device " + viewNode.window.getDevice());
         } finally {
-            connection.close();
+            if (connection != null) {
+                connection.close();
+            }
         }
     }
 
@@ -661,7 +686,9 @@ public class DeviceBridge {
             Log.e(TAG, "Unable to dump displaylist for node " + viewNode + " in window "
                     + viewNode.window + " on device " + viewNode.window.getDevice());
         } finally {
-            connection.close();
+            if (connection != null) {
+                connection.close();
+            }
         }
     }
 
