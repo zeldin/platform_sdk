@@ -68,7 +68,11 @@ if [[ "${HOST:0:6}" == "CYGWIN" || "$USE_MINGW" == "1" ]]; then
     USE_COPY="1"
   fi
 elif [[ "$HOST" == "Linux" ]]; then
-  PLATFORM="linux-x86"
+  case "`uname -m`" in
+    *ppc*|*Power*) PLATFORM="linux-ppc";;
+    *86*) PLATFORM="linux-x86";;
+    *) die "Unsupported platform ($HOST). Aborting.";;
+  esac
 elif [[ "$HOST" == "Darwin" ]]; then
   PLATFORM="darwin-x86"
 else
