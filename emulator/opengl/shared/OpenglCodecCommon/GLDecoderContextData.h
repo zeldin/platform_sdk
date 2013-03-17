@@ -20,6 +20,7 @@
 #include <string.h>
 #include "FixedBuffer.h"
 #include "codec_defs.h"
+#include "glUtils.h"
 
 class  GLDecoderContextData {
 public:
@@ -51,11 +52,21 @@ public:
         delete [] m_pointerData;
     }
 
-    void storePointerData(unsigned int loc, void *data, size_t len) {
+    void storePointerData(unsigned int loc, void *data, size_t len, GLenum type) {
 
         assert(loc < m_nLocations);
         m_pointerData[loc].alloc(len);
         memcpy(m_pointerData[loc].ptr(), data, len);
+#ifdef __BIG_ENDIAN__
+	switch(glSizeof(type)) {
+	case 2:
+	  swap16_array((unsigned short *)m_pointerData[loc].ptr(), len/2);
+	  break;
+	case 4:
+	  swap32_array((unsigned int *)m_pointerData[loc].ptr(), len/4);
+	  break;
+	}
+#endif
     }
     void *pointerData(unsigned int loc) {
         assert(loc < m_nLocations);
@@ -64,6 +75,17 @@ public:
 private:
     FixedBuffer *m_pointerData;
     int m_nLocations;
+
+#ifdef __BIG_ENDIAN__
+    static void swap16_array(unsigned short *p, unsigned cnt)
+    {
+      while(cnt--) { *p = __builtin_bswap16(*p); p++; }
+    }
+    static void swap32_array(unsigned int *p, unsigned cnt)
+    {
+      while(cnt--) { *p = __builtin_bswap32(*p); p++; }
+    }
+#endif
 };
 
 #endif

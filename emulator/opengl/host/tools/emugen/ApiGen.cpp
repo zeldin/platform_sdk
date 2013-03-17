@@ -764,6 +764,22 @@ int ApiGen::genDecoderImpl(const std::string &filename)
     fprintf(fp, "#include <stdio.h>\n\n");
     fprintf(fp, "typedef unsigned int tsize_t; // Target \"size_t\", which is 32-bit for now. It may or may not be the same as host's size_t when emugen is compiled.\n\n");
 
+    fprintf(fp, "#ifdef __BIG_ENDIAN__\n");
+    fprintf(fp, "template<class T> static inline T swap64(const T& n)\n{\n  union { T a; uint64_t b; } v;\n  v.b = __builtin_bswap64(*(uint64_t *)&n);\n  return v.a;\n}\n");
+    fprintf(fp, "template<class T> static inline T swap32(const T& n)\n{\n  union { T a; uint32_t b; } v;\n  v.b = __builtin_bswap32(*(uint32_t *)&n);\n  return v.a;\n}\n");
+    fprintf(fp, "template<class T> static inline T swap16(const T& n)\n{\n  union { T a; uint16_t b; } v;\n  v.b = __builtin_bswap16(*(uint16_t *)&n);\n  return v.a;\n}\n");
+    fprintf(fp, "template<class T> static inline T swap(T n)\n{\n  if(sizeof(T)==8) return swap64(n);\n  else if(sizeof(T)==4) return swap32(n);\n  else if(sizeof(T)==2) return swap16(n);\n  else return n;\n}\n");
+    fprintf(fp, "template<class T> static inline void swap_in_place(T& n)\n{\n  n = swap(n);\n}\n");
+    fprintf(fp, "template<class T> static inline void swap_array(T* a, size_t sz)\n{\n  if(sizeof(T)>1 && sz>0) {\n    sz /= sizeof(T);\n    while(sz--) swap_in_place(*a++);\n  }\n}\n");
+    fprintf(fp, "template<class T> static inline void swap_array(const T* a, size_t sz)\n{\n  swap_array((T*)a, sz);\n}\n");
+    fprintf(fp, "static inline void swap_array(void *a, size_t sz)\n{}\n");
+    fprintf(fp, "static inline void swap_array(const void *a, size_t sz)\n{}\n");
+    fprintf(fp, "#else\n");
+    fprintf(fp, "template<class T> static inline T swap(T n)\n{\n  return n;\n}\n");
+    fprintf(fp, "template<class T> static inline void swap_in_place(T& n)\n{}\n");
+    fprintf(fp, "template<class T> static inline void swap_array(T* a, size_t sz)\n{}\n");
+    fprintf(fp, "#endif\n\n");
+
     // decoder switch;
     fprintf(fp, "size_t %s::decode(void *buf, size_t len, IOStream *stream)\n{\n", classname.c_str());
     fprintf(fp,
@@ -777,8 +793,8 @@ int ApiGen::genDecoderImpl(const std::string &filename)
 #endif \n\
 \twhile ((len - pos >= 8) && !unknownOpcode) {   \n\
 \t\tvoid *params[%u]; \n\
-\t\tint opcode = *(int *)ptr;   \n\
-\t\tunsigned int packetLen = *(int *)(ptr + 4);\n\
+\t\tint opcode = swap(*(int *)ptr);   \n\
+\t\tunsigned int packetLen = swap(*(int *)(ptr + 4));\n\
 \t\tif (len - pos < packetLen)  return pos; \n\
 \t\tswitch(opcode) {\n",
             (uint) m_maxEntryPointsParams);
@@ -811,7 +827,7 @@ int ApiGen::genDecoderImpl(const std::string &filename)
 
         for (int pass = PASS_TmpBuffAlloc; pass < PASS_LAST; pass++) {
             if (pass == PASS_FunctionCall && !e->retval().isVoid() && !e->retval().isPointer()) {
-                fprintf(fp, "\t\t\t*(%s *)(&tmpBuf[%s]) = ", retvalType.c_str(),
+                fprintf(fp, "\t\t\t*(%s *)(&tmpBuf[%s]) = swap(", retvalType.c_str(),
                         totalTmpBuffOffset.c_str());
             }
 
@@ -838,17 +854,22 @@ int ApiGen::genDecoderImpl(const std::string &filename)
 
                     if (!v->isPointer()) {
                         if (pass == PASS_FunctionCall || pass == PASS_DebugPrint) {
-                            fprintf(fp, "*(%s *)(ptr + %s)", v->type()->name().c_str(), varoffset.c_str());
+                            fprintf(fp, "swap(*(%s *)(ptr + %s))", v->type()->name().c_str(), varoffset.c_str());
                         }
                         varoffset += " + " + toString(v->type()->bytes());
                     } else {
                         if (v->pointerDir() == Var::POINTER_IN || v->pointerDir() == Var::POINTER_INOUT) {
                             if (pass == PASS_MemAlloc && v->pointerDir() == Var::POINTER_INOUT) {
-                                fprintf(fp, "\t\t\tsize_t tmpPtr%uSize = (size_t)*(unsigned int *)(ptr + %s);\n",
+                                fprintf(fp, "\t\t\tsize_t tmpPtr%uSize = (size_t)swap(*(unsigned int *)(ptr + %s));\n",
                                         (uint) j, varoffset.c_str());
                                 fprintf(fp, "unsigned char *tmpPtr%u = (ptr + %s + 4);\n",
                                         (uint) j, varoffset.c_str());
                             }
+			    if (pass == PASS_MemAlloc) {
+                                fprintf(fp, "\t\t\tswap_array((%s)(ptr + %s + 4), swap(*(unsigned int *)(ptr + %s)));\n",
+                                        v->type()->name().c_str(), varoffset.c_str(),
+                                        varoffset.c_str());
+			    }
                             if (pass == PASS_FunctionCall) {
                                 if (v->nullAllowed()) {
                                     fprintf(fp, "*((unsigned int *)(ptr + %s)) == 0 ? NULL : (%s)(ptr + %s + 4)",
@@ -858,14 +879,14 @@ int ApiGen::genDecoderImpl(const std::string &filename)
                                             v->type()->name().c_str(), varoffset.c_str());
                                 }
                             } else if (pass == PASS_DebugPrint) {
-                                fprintf(fp, "(%s)(ptr + %s + 4), *(unsigned int *)(ptr + %s)",
+                                fprintf(fp, "(%s)(ptr + %s + 4), swap(*(unsigned int *)(ptr + %s))",
                                         v->type()->name().c_str(), varoffset.c_str(),
                                         varoffset.c_str());
                             }
-                            varoffset += " + 4 + *(tsize_t *)(ptr +" + varoffset + ")";
+                            varoffset += " + 4 + swap(*(tsize_t *)(ptr +" + varoffset + "))";
                         } else { // out pointer;
                             if (pass == PASS_TmpBuffAlloc) {
-                                fprintf(fp, "\t\t\tsize_t tmpPtr%uSize = (size_t)*(unsigned int *)(ptr + %s);\n",
+                                fprintf(fp, "\t\t\tsize_t tmpPtr%uSize = (size_t)swap(*(unsigned int *)(ptr + %s));\n",
                                         (uint) j, varoffset.c_str());
                                 if (!totalTmpBuffExist) {
                                     fprintf(fp, "\t\t\tsize_t totalTmpSize = tmpPtr%uSize;\n", (uint)j);
@@ -888,16 +909,19 @@ int ApiGen::genDecoderImpl(const std::string &filename)
                                     fprintf(fp, "(%s)(tmpPtr%u)", v->type()->name().c_str(), (uint) j);
                                 }
                             } else if (pass == PASS_DebugPrint) {
-                                fprintf(fp, "(%s)(tmpPtr%u), *(unsigned int *)(ptr + %s)",
+                                fprintf(fp, "(%s)(tmpPtr%u), swap(*(unsigned int *)(ptr + %s))",
                                         v->type()->name().c_str(), (uint) j,
                                         varoffset.c_str());
-                            }
+                            } else if (pass == PASS_Epilog) {
+			        fprintf(fp, "\t\t\tswap_array((%s)tmpPtr%u, tmpPtr%uSize);\n", v->type()->name().c_str(), (uint) j, (uint) j);
+			    }
                             varoffset += " + 4";
                         }
                     }
                 }
             }
 
+            if (pass == PASS_FunctionCall && !e->retval().isVoid() && !e->retval().isPointer()) fprintf(fp, ")");
             if (pass == PASS_FunctionCall || pass == PASS_DebugPrint) fprintf(fp, ");\n");
             if (pass == PASS_DebugPrint) fprintf(fp, "#endif\n");
 
@@ -921,8 +945,8 @@ int ApiGen::genDecoderImpl(const std::string &filename)
                     fprintf(fp, "\t\t\tstream->flush();\n");
                 }
 
-                fprintf(fp, "\t\t\tpos += *(int *)(ptr + 4);\n");
-                fprintf(fp, "\t\t\tptr += *(int *)(ptr + 4);\n");
+                fprintf(fp, "\t\t\tpos += swap(*(int *)(ptr + 4));\n");
+                fprintf(fp, "\t\t\tptr += swap(*(int *)(ptr + 4));\n");
             }
 
         } // pass;
