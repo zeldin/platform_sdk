@@ -29,6 +29,9 @@ import static org.eclipse.wst.xml.core.internal.regions.DOMRegionContext.XML_TAG
 
 import com.android.SdkConstants;
 import com.android.annotations.VisibleForTesting;
+import com.android.ide.common.xml.XmlFormatPreferences;
+import com.android.ide.common.xml.XmlFormatStyle;
+import com.android.ide.common.xml.XmlPrettyPrinter;
 import com.android.ide.eclipse.adt.AdtPlugin;
 import com.android.ide.eclipse.adt.AdtUtils;
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.DomUtilities;
@@ -78,7 +81,7 @@ import java.util.Queue;
  * Formatter which formats XML content according to the established Android coding
  * conventions. It performs the format by computing the smallest set of DOM nodes
  * overlapping the formatted region, then it pretty-prints that XML region
- * using the {@link XmlPrettyPrinter}, and then it replaces the affected region
+ * using the {@link EclipseXmlPrettyPrinter}, and then it replaces the affected region
  * by the pretty-printed region.
  * <p>
  * This strategy is also used for delegation. If the user has chosen to use the
@@ -269,6 +272,7 @@ public class AndroidXmlFormattingStrategy extends ContextBasedFormattingStrategy
         int initialDepth = 0;
         int replaceStart;
         int replaceEnd;
+        boolean endWithNewline = false;
         if (startNode == null || endNode == null) {
             // Process the entire document
             root = domDocument;
@@ -278,6 +282,11 @@ public class AndroidXmlFormattingStrategy extends ContextBasedFormattingStrategy
             endNode = root;
             replaceStart = 0;
             replaceEnd = document.getLength();
+            try {
+                endWithNewline = replaceEnd > 0 && document.getChar(replaceEnd - 1) == '\n';
+            } catch (BadLocationException e) {
+                // Can't happen
+            }
         } else {
             root = DomUtilities.getCommonAncestor(startNode, endNode);
             initialDepth = root != null ? DomUtilities.getDepth(root) - 1 : 0;
@@ -332,9 +341,10 @@ public class AndroidXmlFormattingStrategy extends ContextBasedFormattingStrategy
         }
 
         XmlFormatStyle style = guessStyle(model, domDocument);
-        XmlFormatPreferences prefs = XmlFormatPreferences.create();
+        XmlFormatPreferences prefs = EclipseXmlFormatPreferences.create();
         String delimiter = TextUtilities.getDefaultLineDelimiter(document);
-        XmlPrettyPrinter printer = new XmlPrettyPrinter(prefs, style, delimiter);
+        XmlPrettyPrinter printer = new EclipseXmlPrettyPrinter(prefs, style, delimiter);
+        printer.setEndWithNewline(endWithNewline);
 
         if (indentationLevels != null) {
             printer.setIndentationLevels(indentationLevels);
@@ -517,7 +527,10 @@ public class AndroidXmlFormattingStrategy extends ContextBasedFormattingStrategy
     static XmlFormatStyle guessStyle(IStructuredModel model, Document domDocument) {
         // The "layout" style is used for most XML resource file types:
         // layouts, color-lists and state-lists, animations, drawables, menus, etc
-        XmlFormatStyle style = XmlFormatStyle.LAYOUT;
+        XmlFormatStyle style = XmlFormatStyle.get(domDocument);
+        if (style == XmlFormatStyle.FILE) {
+            style = XmlFormatStyle.LAYOUT;
+        }
 
         // The "resource" style is used for most value-based XML files:
         // strings, dimensions, booleans, colors, integers, plurals,
@@ -546,7 +559,7 @@ public class AndroidXmlFormattingStrategy extends ContextBasedFormattingStrategy
                     String[] segments = resourceFolder.split("-"); //$NON-NLS-1$
                     ResourceType type = ResourceType.getEnum(segments[0]);
                     if (type != null) {
-                        style = XmlFormatStyle.get(type);
+                        style = EclipseXmlPrettyPrinter.get(type);
                     }
                 }
             }

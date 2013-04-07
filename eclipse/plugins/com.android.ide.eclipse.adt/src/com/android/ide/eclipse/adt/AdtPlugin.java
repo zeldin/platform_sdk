@@ -1433,7 +1433,7 @@ public class AdtPlugin extends AbstractUIPlugin implements ILogger {
                                     // project that have been resolved before the sdk was loaded
                                     // will have a ProjectState where the IAndroidTarget is null
                                     // so we load the target now that the SDK is loaded.
-                                    sdk.loadTarget(Sdk.getProjectState(iProject));
+                                    sdk.loadTargetAndBuildTools(Sdk.getProjectState(iProject));
                                     list.add(javaProject);
                                 }
                             }
@@ -1884,7 +1884,7 @@ public class AdtPlugin extends AbstractUIPlugin implements ILogger {
     // --------- ILogger methods -----------
 
     @Override
-    public void error(Throwable t, String format, Object... args) {
+    public void error(@Nullable Throwable t, @Nullable String format, Object... args) {
         if (t != null) {
             log(t, format, args);
         } else {
