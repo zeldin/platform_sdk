@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: %Bundle-Name
 Bundle-SymbolicName: com.android.ide.eclipse.ddms;singleton:=true
-Bundle-Version: 22.0.0.qualifier
+Bundle-Version: 22.0.5.qualifier
 Bundle-Activator: com.android.ide.eclipse.ddms.DdmsPlugin
 Bundle-Vendor: %Bundle-Vendor
 Bundle-Localization: plugin
@@ -38,6 +38,6 @@ Bundle-ClassPath: .,
  libs/ddmuilib.jar,
  libs/jcommon-1.0.12.jar,
  libs/jfreechart-1.0.9.jar,
- libs/jfreechart-1.0.9-swt.jar,
+ libs/jfreechart-swt-1.0.9.jar,
  libs/uiautomatorviewer.jar
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
