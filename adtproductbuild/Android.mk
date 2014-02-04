@@ -49,7 +49,7 @@ $(ADT_IDE_JAVA_TARGET) : $(TOPDIR)sdk/adtproductbuild/adt_eclipse_ide \
 	$(hide)rm -rf $(TOPDIR)out/host/eclipse/adtproduct/fbuild/plugins
 	$(hide)rm -rf $(TOPDIR)out/host/eclipse/adtproduct/pbuild/plugins
 	$(hide)mkdir -p $(dir $@)
-	$(hide)$(TOPDIR)sdk/eclipse/scripts/create_all_symlinks.sh -c
+	$(hide) $(TOPDIR)sdk/eclipse/scripts/create_all_symlinks.sh -c
 	$(hide)cd $(TOPDIR)sdk/adtproductbuild && \
 		rm -f ../../$(ADT_IDE_BUILD_LOG) && mkdir -p ../../$(dir $(ADT_IDE_BUILD_LOG)) && \
 		( java -jar ../../external/eclipse-basebuilder/basebuilder-3.6.2/org.eclipse.releng.basebuilder/plugins/org.eclipse.equinox.launcher_1.1.0.v20100507.jar \
@@ -121,7 +121,9 @@ $(5): $(ADT_IDE_JAVA_TARGET)
 	  $(4)/eclipse/plugins/com.android.ide.eclipse.adt.package_*/about.mappings && \
 	sed -i -e 's/org.eclipse.platform.ide/com.android.ide.eclipse.adt.package.product/g' \
 	       -e 's/org.eclipse.platform/com.android.ide.eclipse.adt.package/g' \
-	  $(4)/eclipse/configuration/config.ini
+	  $(4)/eclipse/configuration/config.ini && \
+	echo "-XX:MaxPermSize=512M" >> \
+	  $(4)/eclipse/$(if $(filter macosx.cocoa,$(1)),Eclipse.app/Contents/MacOS/)eclipse.ini
 	$(hide)cd $(4) && zip -9rq ../$(notdir $(5)) eclipse
 ifneq (,$(ADT_IDE_DEST_DIR))
 $(ADT_IDE_DEST_DIR)/$(notdir $(5)): $(5)
@@ -167,4 +169,3 @@ $(LOCAL_BUILT_MODULE) : $(ADT_IDE_MODULE_DEPS)
 
 endif
 endif
-

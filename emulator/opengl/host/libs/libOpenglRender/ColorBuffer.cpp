@@ -115,24 +115,8 @@ ColorBuffer::ColorBuffer() :
     m_eglImage(NULL),
     m_blitEGLImage(NULL),
     m_fbo(0),
-    m_internalFormat(0),
-    m_warYInvertBug(false)
+    m_internalFormat(0)
 {
-#if __APPLE__
-    // On Macs running OS X 10.6 and 10.7 with Intel HD Graphics 3000 or 4000,
-    // some screens or parts of the screen are displayed upside down. The exact
-    // conditions/sequence that triggers this aren't known yet; I haven't been
-    // able to reproduce it in a standalone test. This way of enabling the
-    // workaround will break if it is a driver bug (rather than a bug in this
-    // code which works by accident elsewhere) and Apple/Intel release a fix
-    // for it. Running a standalone test to detect the problem at runtime would
-    // be more robust.
-    const char* renderer = (const char*)s_gl.glGetString(GL_RENDERER);
-    if (strstr(renderer, "Intel HD Graphics 3000") ||
-        strstr(renderer, "Intel HD Graphics 4000")) {
-        m_warYInvertBug = true;
-    }
-#endif
 }
 
 ColorBuffer::~ColorBuffer()
@@ -170,7 +154,7 @@ void ColorBuffer::subUpdate(int x, int y, int width, int height, GLenum p_format
 
 bool ColorBuffer::blitFromCurrentReadBuffer()
 {
-    RenderThreadInfo *tInfo = getRenderThreadInfo();
+    RenderThreadInfo *tInfo = RenderThreadInfo::get();
     if (!tInfo->currContext.Ptr()) {
         // no Current context
         return false;
@@ -188,16 +172,16 @@ bool ColorBuffer::blitFromCurrentReadBuffer()
         s_gl2.glGenTextures(1,&tmpTex);
         s_gl2.glBindTexture(GL_TEXTURE_2D, tmpTex);
         s_gl2.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_blitEGLImage);
-        s_gl2.glCopyTexImage2D(GL_TEXTURE_2D, 0, m_internalFormat,
-                               0, 0, m_width, m_height, 0);
+        s_gl2.glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+                                  m_width, m_height);
     }
     else {
         s_gl.glGetIntegerv(GL_TEXTURE_BINDING_2D, &currTexBind);
         s_gl.glGenTextures(1,&tmpTex);
         s_gl.glBindTexture(GL_TEXTURE_2D, tmpTex);
         s_gl.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_blitEGLImage);
-        s_gl.glCopyTexImage2D(GL_TEXTURE_2D, 0, m_internalFormat,
-                              0, 0, m_width, m_height, 0);
+        s_gl.glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+                                 m_width, m_height);
     }
 
 
@@ -225,7 +209,7 @@ bool ColorBuffer::blitFromCurrentReadBuffer()
             s_gl.glBindTexture(GL_TEXTURE_2D, m_blitTex);
             s_gl.glEnable(GL_TEXTURE_2D);
             s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-            drawTexQuad(!m_warYInvertBug);
+            drawTexQuad();  // this will render the texture flipped
 
             // unbind the fbo
             s_gl.glBindFramebufferOES(GL_FRAMEBUFFER_OES, 0);
@@ -257,7 +241,7 @@ bool ColorBuffer::blitFromCurrentReadBuffer()
 bool ColorBuffer::bindToTexture()
 {
     if (m_eglImage) {
-        RenderThreadInfo *tInfo = getRenderThreadInfo();
+        RenderThreadInfo *tInfo = RenderThreadInfo::get();
         if (tInfo->currContext.Ptr()) {
 #ifdef WITH_GLES2
             if (tInfo->currContext->isGL2()) {
@@ -278,7 +262,7 @@ bool ColorBuffer::bindToTexture()
 bool ColorBuffer::bindToRenderbuffer()
 {
     if (m_eglImage) {
-        RenderThreadInfo *tInfo = getRenderThreadInfo();
+        RenderThreadInfo *tInfo = RenderThreadInfo::get();
         if (tInfo->currContext.Ptr()) {
 #ifdef WITH_GLES2
             if (tInfo->currContext->isGL2()) {
@@ -325,12 +309,12 @@ bool ColorBuffer::post()
     s_gl.glBindTexture(GL_TEXTURE_2D, m_tex);
     s_gl.glEnable(GL_TEXTURE_2D);
     s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-    drawTexQuad(true);
+    drawTexQuad();
 
     return true;
 }
 
-void ColorBuffer::drawTexQuad(bool flipy)
+void ColorBuffer::drawTexQuad()
 {
     GLfloat verts[] = { -1.0f, -1.0f, 0.0f,
                          -1.0f, +1.0f, 0.0f,
@@ -341,13 +325,6 @@ void ColorBuffer::drawTexQuad(bool flipy)
                            0.0f, 0.0f,
                            1.0f, 1.0f,
                            1.0f, 0.0f };
-
-    if (!flipy) {
-        for (int i = 0; i < 4; i++) {
-            // swap 0.0/1.0 in second element of each tcoord vector
-            tcoords[2*i + 1] = tcoords[2*i + 1] == 0.0f ? 1.0f : 0.0f;
-        }
-    }
 
     s_gl.glClientActiveTexture(GL_TEXTURE0);
     s_gl.glEnableClientState(GL_TEXTURE_COORD_ARRAY);

@@ -21,41 +21,55 @@ if [ `basename "$PWD"` != "eclipse" ]; then
     exit 1
 fi
 
-function do_replace() {
-  IS_MAC=""
-  if [[ $(uname) == "Darwin" ]]; then IS_MAC="1" ; fi
+# sanity check the new version number
+if [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "## Version $NEW: seems valid."
+else
+  echo "## Version $NEW: does not conform to major.mino.micro format."
+  exit 1
+fi
 
-  for i in $*; do
-    if [[ -f "$i" ]]; then
-      echo "+ Updating: $i"
-      if [[ $IS_MAC ]]; then
-        sed -i "" -e "s/$SED_OLD/$SED_NEW/g" "$i"
-      else
-        sed -i -e "s/$SED_OLD/$SED_NEW/g" "$i"
-      fi
+function replace() {
+  if [[ -f "$1" ]]; then
+    echo "### Change $SED_OLD => $SED_NEW in $1"
+    if [[ $(uname) == "Linux" ]]; then
+      sed -i  "s/$SED_OLD/$SED_NEW/g" "$1"
     else
-      echo "- Ignoring: $i"
+      # sed on Mac doesn't handle -i the same way as on Linux
+      sed -i ""  "s/$SED_OLD/$SED_NEW/g" "$1"
     fi
-  done
+  fi
 }
 
-# Files that use the ".qualifier" suffix
+# ---1--- Change Eclipse's qualified version numbers
+# quote dots for regexps
 SED_OLD="${OLD//./\.}\.qualifier"
 SED_NEW="${NEW//./\.}\.qualifier"
-do_replace $(grep -rl "$SED_OLD" * | grep -E "\.xml$|\.MF$|\.product$")
 
-# Specific files that do not use the .qualifier suffix.
-# We hand-pick them instead of using a generic regexp, to avoid bogus replacements.
+for i in $(grep -rl "$OLD" * | grep -E "\.xml$|\.MF$"); do
+  if [[ -f "$i" && $(basename "$i") != "build.xml" ]]; then
+    replace "$i"
+  fi
+done
+
+# ---2--- Change unqualified version numbers in specific files
 SED_OLD="${OLD//./\.}"
 SED_NEW="${NEW//./\.}"
-do_replace \
-  plugins/com.android.ide.eclipse.monitor/monitor.product \
-  plugins/com.android.ide.eclipse.monitor/plugin.properties
+for i in plugins/com.android.ide.eclipse.adt.package/ide.product \
+         plugins/com.android.ide.eclipse.monitor/monitor.product \
+         plugins/com.android.ide.eclipse.monitor/plugin.properties; do
+  if grep -qs "$OLD" "$i"; then
+    replace "$i"
+  fi
+done
 
-echo
-echo "Remaining instances of $OLD"
 # do another grep for older version without the qualifier. We don't
 # want to replace those automatically as it could be something else.
-# Printing out occurence helps find ones to update manually.
-grep -r "$OLD" *
+# Printing out occurence helps find ones to update manually, but exclude
+# some known useless files.
+echo
+echo "#### ----------------"
+echo "#### Remaining instances of $OLD"
+echo
+grep -r "$OLD" * | grep -v -E "/build.xml:|/javaCompiler\.\.\.args:"
 
