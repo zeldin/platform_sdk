@@ -16,6 +16,14 @@
 # Note: currently wrap around existing shell script, reuse most of it,
 # eventually both might merge as needed.
 
+
+###################
+# temporary disable to deal with build server issues
+# see b/14685861
+exit 0
+###################
+
+
 set -e  # Fail this script as soon as a command fails -- fail early, fail fast
 
 PROG_DIR=$(dirname "$0")
@@ -119,7 +127,9 @@ function build_adt_ide() {
     # This needs to run from the top android directory
     D="$PROG_DIR"
     cd "$D/../../../" && echo "Switched to directory $PWD"
-    for sc in */*/*/build_ide*.sh; do
+
+    IDE_SCRIPTS="sdk/eclipse/scripts/build_ide.sh tools/idea/build_ide_ext.sh"
+    for sc in $IDE_SCRIPTS; do
       if [[ -x $sc ]]; then
         echo "RUNNING $sc from $PWD"
         $sc "$DEST_DIR" "$QUALIFIER" "${preview}${BUILD_NUMBER:-$QUALIFIER}"

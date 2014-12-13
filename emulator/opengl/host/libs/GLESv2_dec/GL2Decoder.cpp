@@ -19,6 +19,9 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
+static inline void* SafePointerFromUInt(GLuint value) {
+  return (void*)(uintptr_t)value;
+}
 
 GL2Decoder::GL2Decoder()
 {
@@ -57,7 +60,7 @@ int GL2Decoder::initGL(get_proc_func_t getProcFunc, void *getProcFuncData)
             libname = getenv(GLES2_LIBNAME_VAR);
         }
 
-        m_GL2library = osUtils::dynLibrary::open(libname);
+        m_GL2library = emugl::SharedLibrary::open(libname);
         if (m_GL2library == NULL) {
             fprintf(stderr, "%s: Couldn't find %s \n", __FUNCTION__, libname);
             return -1;
@@ -67,14 +70,14 @@ int GL2Decoder::initGL(get_proc_func_t getProcFunc, void *getProcFuncData)
         this->initDispatchByName(getProcFunc, getProcFuncData);
     }
 
-    set_glGetCompressedTextureFormats(s_glGetCompressedTextureFormats);
-    set_glVertexAttribPointerData(s_glVertexAttribPointerData);
-    set_glVertexAttribPointerOffset(s_glVertexAttribPointerOffset);
+    glGetCompressedTextureFormats = s_glGetCompressedTextureFormats;
+    glVertexAttribPointerData = s_glVertexAttribPointerData;
+    glVertexAttribPointerOffset = s_glVertexAttribPointerOffset;
 
-    set_glDrawElementsOffset(s_glDrawElementsOffset);
-    set_glDrawElementsData(s_glDrawElementsData);
-    set_glShaderString(s_glShaderString);
-    set_glFinishRoundTrip(s_glFinishRoundTrip);
+    glDrawElementsOffset = s_glDrawElementsOffset;
+    glDrawElementsData = s_glDrawElementsData;
+    glShaderString = s_glShaderString;
+    glFinishRoundTrip = s_glFinishRoundTrip;
     return 0;
 
 }
@@ -115,7 +118,7 @@ void GL2Decoder::s_glVertexAttribPointerOffset(void *self, GLuint indx, GLint si
                                                GLboolean normalized, GLsizei stride,  GLuint data)
 {
     GL2Decoder *ctx = (GL2Decoder *) self;
-    ctx->glVertexAttribPointer(indx, size, type, normalized, stride, (GLvoid *)data);
+    ctx->glVertexAttribPointer(indx, size, type, normalized, stride, SafePointerFromUInt(data));
 }
 
 
@@ -129,7 +132,7 @@ void GL2Decoder::s_glDrawElementsData(void *self, GLenum mode, GLsizei count, GL
 void GL2Decoder::s_glDrawElementsOffset(void *self, GLenum mode, GLsizei count, GLenum type, GLuint offset)
 {
     GL2Decoder *ctx = (GL2Decoder *)self;
-    ctx->glDrawElements(mode, count, type, (void *)offset);
+    ctx->glDrawElements(mode, count, type, SafePointerFromUInt(offset));
 }
 
 void GL2Decoder::s_glShaderString(void *self, GLuint shader, const GLchar* string, GLsizei len)

@@ -34,7 +34,7 @@ public class GLObjectProperty extends GLAbstractAtomicProperty {
 
     @Override
     public boolean isDefault() {
-        return mDefaultValue == mCurrentValue;
+        return mDefaultValue != null & mDefaultValue.equals(mCurrentValue);
     }
 
     @Override

@@ -78,6 +78,9 @@ _adb() {
                     install)
                         _adb_cmd_install "$serial" $i
                         ;;
+                    sideload)
+                        _adb_cmd_sideload "$serial" $i
+                        ;;
                     pull)
                         _adb_cmd_pull "$serial" $i
                         ;;
@@ -126,11 +129,22 @@ _adb_cmd_install() {
 
     cur="${COMP_WORDS[COMP_CWORD]}"
     if [[ $where == OPTIONS ]]; then
-        COMPREPLY=( $(compgen -W "-l -r -s" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "-d -l -r -s" -- "${cur}") )
         return
     fi
 
     _adb_util_complete_local_file "${cur}" '!*.apk'
+}
+
+_adb_cmd_sideload() {
+    local serial i cur
+
+    serial=$1
+    i=$2
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    _adb_util_complete_local_file "${cur}" '!*.zip'
 }
 
 _adb_cmd_push() {
@@ -327,7 +341,7 @@ _adb_util_list_files() {
 
 _adb_util_complete_local_file()
 {
-    local file xspec i j
+    local file xspec i j IFS=$'\n'
     local -a dirs files
 
     file=$1

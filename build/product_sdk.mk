@@ -27,10 +27,4 @@
 
 # Host tools and java libraries that are parts of the SDK.
 PRODUCT_PACKAGES += \
-	ant-glob \
-	annotations \
-	mksdcard \
-	monitor \
-	fastboot \
-	emugen
 

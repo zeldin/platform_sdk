@@ -18,6 +18,7 @@ package com.android.ide.eclipse.adt.internal.editors.layout.gle2;
 
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
+import com.android.ide.common.rendering.RenderSecurityManager;
 import com.android.ide.common.rendering.api.LayoutLog;
 import com.android.ide.eclipse.adt.AdtPlugin;
 
@@ -43,10 +44,12 @@ public class RenderLogger extends LayoutLog {
     private List<String> mTags;
     private List<Throwable> mTraces;
     private static Set<String> sIgnoredFidelityWarnings;
+    private final Object mCredential;
 
     /** Construct a logger for the given named layout */
-    RenderLogger(String name) {
+    RenderLogger(String name, Object credential) {
         mName = name;
+        mCredential = credential;
     }
 
     /**
@@ -123,7 +126,7 @@ public class RenderLogger extends LayoutLog {
     public void error(String tag, String message, Object data) {
         String description = describe(message);
 
-        AdtPlugin.log(IStatus.ERROR, "%1$s: %2$s", mName, description);
+        appendToIdeLog(null, IStatus.ERROR, description);
 
         // Workaround: older layout libraries don't provide a tag for this error
         if (tag == null && message != null
@@ -137,7 +140,8 @@ public class RenderLogger extends LayoutLog {
     @Override
     public void error(String tag, String message, Throwable throwable, Object data) {
         String description = describe(message);
-        AdtPlugin.log(throwable, "%1$s: %2$s", mName, description);
+        appendToIdeLog(throwable, IStatus.ERROR, description);
+
         if (throwable != null) {
             if (throwable instanceof ClassNotFoundException) {
                 // The project callback is given a chance to resolve classes,
@@ -187,7 +191,7 @@ public class RenderLogger extends LayoutLog {
         }
 
         if (log) {
-            AdtPlugin.log(IStatus.WARNING, "%1$s: %2$s", mName, description);
+            appendToIdeLog(null, IStatus.WARNING, description);
         }
 
         addWarning(tag, description);
@@ -200,7 +204,8 @@ public class RenderLogger extends LayoutLog {
         }
 
         String description = describe(message);
-        AdtPlugin.log(throwable, "%1$s: %2$s", mName, description);
+        appendToIdeLog(throwable, IStatus.ERROR, description);
+
         if (throwable != null) {
             mHaveExceptions = true;
         }
@@ -302,6 +307,21 @@ public class RenderLogger extends LayoutLog {
             return mTags.contains(tag);
         } else {
             return false;
+        }
+    }
+
+    // Append the given message to the ADT log. Bypass the sandbox if necessary
+    // such that we can write to the log file.
+    private void appendToIdeLog(Throwable throwable, int severity, String description) {
+        boolean token = RenderSecurityManager.enterSafeRegion(mCredential);
+        try {
+            if (throwable != null) {
+                AdtPlugin.log(throwable, "%1$s: %2$s", mName, description);
+            } else {
+                AdtPlugin.log(severity, "%1$s: %2$s", mName, description);
+            }
+        } finally {
+            RenderSecurityManager.exitSafeRegion(token);
         }
     }
 }

@@ -25,9 +25,10 @@
 
 #define STREAM_BUFFER_SIZE 4*1024*1024
 
-RenderThread::RenderThread() :
-    osUtils::Thread(),
-    m_stream(NULL),
+RenderThread::RenderThread(IOStream *stream, emugl::Mutex *lock) :
+    emugl::Thread(),
+    m_lock(lock),
+    m_stream(stream),
     m_finished(false)
 {
 }
@@ -37,19 +38,12 @@ RenderThread::~RenderThread()
     delete m_stream;
 }
 
-RenderThread *RenderThread::create(IOStream *p_stream)
+RenderThread *RenderThread::create(IOStream *p_stream, emugl::Mutex *lock)
 {
-    RenderThread *rt = new RenderThread();
-    if (!rt) {
-        return NULL;
-    }
-
-    rt->m_stream = p_stream;
-
-    return rt;
+    return new RenderThread(p_stream, lock);
 }
 
-int RenderThread::Main()
+intptr_t RenderThread::main()
 {
     RenderThreadInfo tInfo;
 
@@ -94,7 +88,7 @@ int RenderThread::Main()
         stats_totalBytes += readBuf.validData();
         long long dt = GetCurrentTimeMS() - stats_t0;
         if (dt > 1000) {
-            float dts = (float)dt / 1000.0f;
+            //float dts = (float)dt / 1000.0f;
             //printf("Used Bandwidth %5.3f MB/s\n", ((float)stats_totalBytes / dts) / (1024.0f*1024.0f));
             stats_totalBytes = 0;
             stats_t0 = GetCurrentTimeMS();
@@ -113,6 +107,7 @@ int RenderThread::Main()
         do {
             progress = false;
 
+            m_lock->lock();
             //
             // try to process some of the command buffer using the GLESv1 decoder
             //
@@ -140,6 +135,8 @@ int RenderThread::Main()
                 readBuf.consume(last);
                 progress = true;
             }
+
+            m_lock->unlock();
 
         } while( progress );
 

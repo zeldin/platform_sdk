@@ -41,7 +41,6 @@ import static com.android.SdkConstants.TAG_STYLE;
 import static com.android.SdkConstants.TOOLS_URI;
 import static com.android.SdkConstants.VIEW;
 import static com.android.SdkConstants.VIEW_FRAGMENT;
-import static com.android.ide.common.resources.ResourceRepository.parseResource;
 import static com.android.xml.AndroidManifest.ATTRIBUTE_NAME;
 import static com.android.xml.AndroidManifest.ATTRIBUTE_PACKAGE;
 import static com.android.xml.AndroidManifest.NODE_ACTIVITY;
@@ -54,6 +53,7 @@ import com.android.annotations.VisibleForTesting;
 import com.android.ide.common.resources.ResourceFile;
 import com.android.ide.common.resources.ResourceFolder;
 import com.android.ide.common.resources.ResourceRepository;
+import com.android.ide.common.resources.ResourceUrl;
 import com.android.ide.common.resources.configuration.FolderConfiguration;
 import com.android.ide.eclipse.adt.AdtPlugin;
 import com.android.ide.eclipse.adt.AdtUtils;
@@ -162,7 +162,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
 
 /**
  * Class containing hyperlink resolvers for XML and Java files to jump to associated
@@ -184,10 +183,36 @@ public class Hyperlinks {
         // for the various inner classes that are actual hyperlink resolvers.
     }
 
-    /** Regular expression matching a FQCN for a view class */
+    /**
+     * Returns whether a string represents a valid fully qualified name for a view class.
+     * Does not check for existence.
+     */
     @VisibleForTesting
-    /* package */ static final Pattern CLASS_PATTERN = Pattern.compile(
-        "(([a-zA-Z_\\$][a-zA-Z0-9_\\$]*)+\\.)+[a-zA-Z_\\$][a-zA-Z0-9_\\$]*"); //$NON-NLS-1$
+    static boolean isViewClassName(String name) {
+        int length = name.length();
+        if (length < 2 || name.indexOf('.') == -1) {
+            return false;
+        }
+
+        boolean lastWasDot = true;
+        for (int i = 0; i < length; i++) {
+            char c = name.charAt(i);
+            if (lastWasDot) {
+                if (!Character.isJavaIdentifierStart(c)) {
+                    return false;
+                }
+                lastWasDot = false;
+            } else {
+                if (c == '.') {
+                    lastWasDot = true;
+                } else if (!Character.isJavaIdentifierPart(c)) {
+                    return false;
+                }
+            }
+        }
+
+        return !lastWasDot;
+    }
 
     /** Determines whether the given attribute <b>name</b> is linkable */
     private static boolean isAttributeNameLink(XmlContext context) {
@@ -226,12 +251,9 @@ public class Hyperlinks {
             return !ATTR_ID.equals(attribute.getLocalName());
         }
 
-        Pair<ResourceType,String> resource = parseResource(value);
+        ResourceUrl resource = ResourceUrl.parse(value);
         if (resource != null) {
-            ResourceType type = resource.getFirst();
-            if (type != null) {
-                return true;
-            }
+            return true;
         }
 
         return false;
@@ -371,7 +393,7 @@ public class Hyperlinks {
         // If the element looks like a fully qualified class name (e.g. it's a custom view
         // element) offer it as a link
         String tag = context.getElement().getTagName();
-        return (tag.indexOf('.') != -1 && CLASS_PATTERN.matcher(tag).matches());
+        return isViewClassName(tag);
     }
 
     /** Returns the FQCN for a class declaration at the given context */
@@ -423,7 +445,7 @@ public class Hyperlinks {
      */
     private static URL getDocUrl(String relative) {
         // First try to find locally installed documentation
-        File sdkLocation = new File(Sdk.getCurrent().getSdkLocation());
+        File sdkLocation = new File(Sdk.getCurrent().getSdkOsLocation());
         File docs = new File(sdkLocation, FD_DOCS + File.separator + FD_DOCS_REFERENCE);
         try {
             if (docs.exists()) {
@@ -1130,7 +1152,7 @@ public class Hyperlinks {
             }
         }
 
-        Pair<ResourceType,String> resource = parseResource(url);
+        ResourceUrl resource = ResourceUrl.parse(url);
         if (resource == null) {
             String androidStyle = ANDROID_STYLE_RESOURCE_PREFIX;
             if (url.startsWith(ANDROID_PREFIX)) {
@@ -1163,18 +1185,16 @@ public class Hyperlinks {
      */
     @Nullable
     public static IHyperlink[] getResourceLinks(@Nullable IRegion range, @NonNull String url,
-            @NonNull IProject project,  @Nullable FolderConfiguration configuration) {
+            @Nullable IProject project,  @Nullable FolderConfiguration configuration) {
         List<IHyperlink> links = new ArrayList<IHyperlink>();
 
-        Pair<ResourceType,String> resource = parseResource(url);
-        if (resource == null || resource.getFirst() == null) {
+        ResourceUrl resource = ResourceUrl.parse(url);
+        if (resource == null) {
             return null;
         }
-        ResourceType type = resource.getFirst();
-        String name = resource.getSecond();
-
-        boolean isFramework = url.startsWith(ANDROID_PREFIX)
-                || url.startsWith(ANDROID_THEME_PREFIX);
+        ResourceType type = resource.type;
+        String name = resource.name;
+        boolean isFramework = resource.framework;
         if (project == null) {
             // Local reference *within* a framework
             isFramework = true;
@@ -1479,6 +1499,7 @@ public class Hyperlinks {
     }
 
     /** Returns the project applicable to this hyperlink detection */
+    @Nullable
     private static IProject getProject() {
         IFile file = AdtUtils.getActiveFile();
         if (file != null) {

@@ -17,15 +17,16 @@
 #define _LIB_OPENGL_RENDER_RENDER_SERVER_H
 
 #include "SocketStream.h"
-#include "osThread.h"
+#include "emugl/common/mutex.h"
+#include "emugl/common/thread.h"
 
-class RenderServer : public osUtils::Thread
+class RenderServer : public emugl::Thread
 {
 public:
     static RenderServer *create(char* addr, size_t addrLen);
     virtual ~RenderServer();
 
-    virtual int Main();
+    virtual intptr_t main();
 
     bool isExiting() const { return m_exiting; }
 
@@ -33,6 +34,7 @@ private:
     RenderServer();
 
 private:
+    emugl::Mutex m_lock;
     SocketStream *m_listenSock;
     bool m_exiting;
 };

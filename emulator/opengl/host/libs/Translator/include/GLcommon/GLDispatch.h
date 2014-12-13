@@ -18,7 +18,7 @@
 
 #include <GLES/gl.h>
 #include <GLES2/gl2.h>
-#include <utils/threads.h>
+#include "emugl/common/mutex.h"
 #include "gldefs.h"
 #include "GLutils.h"
 
@@ -257,11 +257,11 @@ public:
     static int  (GL_APIENTRY *glGetUniformLocation)(GLuint program, const GLchar* name);
     static void (GL_APIENTRY *glReleaseShaderCompiler)(void);
     static void (GL_APIENTRY *glShaderBinary)(GLsizei n, const GLuint* shaders, GLenum binaryformat, const GLvoid* binary, GLsizei length);
-    static void (GL_APIENTRY *glShaderSource)(GLuint shader, GLsizei count, const GLchar** string, const GLint* length);
+    static void (GL_APIENTRY *glShaderSource)(GLuint shader, GLsizei count, const GLchar* const* string, const GLint* length);
 
 private:
-    bool                    m_isLoaded;
-    static android::Mutex   s_lock;
+    bool                  m_isLoaded;
+    static emugl::Mutex   s_lock;
 };
 
 #endif

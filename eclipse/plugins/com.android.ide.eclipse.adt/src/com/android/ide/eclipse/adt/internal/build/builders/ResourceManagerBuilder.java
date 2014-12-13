@@ -24,6 +24,10 @@ import com.android.ide.eclipse.adt.internal.preferences.AdtPrefs;
 import com.android.ide.eclipse.adt.internal.preferences.AdtPrefs.BuildVerbosity;
 import com.android.ide.eclipse.adt.internal.project.BaseProjectHelper;
 import com.android.ide.eclipse.adt.internal.project.ProjectHelper;
+import com.android.ide.eclipse.adt.internal.sdk.ProjectState;
+import com.android.ide.eclipse.adt.internal.sdk.Sdk;
+import com.android.sdklib.BuildToolInfo;
+import com.android.sdklib.IAndroidTarget;
 import com.android.utils.Pair;
 
 import org.eclipse.core.resources.IFolder;
@@ -109,6 +113,33 @@ public class ResourceManagerBuilder extends BaseBuilder {
         if (errorMessage != null) {
             errorMessage = String.format(errorMessage,
                     result.getSecond() == null ? "(no value)" : result.getSecond());
+
+            if (JavaCore.VERSION_1_7.equals(result.getSecond())) {
+                // If the user is trying to target 1.7 but compiling with something older,
+                // the error message can be a bit misleading; instead point them in the
+                // direction of updating the project's build target.
+                Sdk currentSdk = Sdk.getCurrent();
+                if (currentSdk != null) {
+                    IAndroidTarget target = currentSdk.getTarget(project.getProject());
+                    if (target != null && target.getVersion().getApiLevel() < 19) {
+                        errorMessage = "Using 1.7 requires compiling with Android 4.4 " +
+                                "(KitKat); currently using " + target.getVersion();
+                    }
+
+                    ProjectState projectState = Sdk.getProjectState(project);
+                    if (projectState != null) {
+                        BuildToolInfo buildToolInfo = projectState.getBuildToolInfo();
+                        if (buildToolInfo == null) {
+                            buildToolInfo = currentSdk.getLatestBuildTool();
+                        }
+                        if (buildToolInfo != null && buildToolInfo.getRevision().getMajor() < 19) {
+                            errorMessage = "Using 1.7 requires using Android Build Tools " +
+                                    "version 19 or later; currently using " +
+                                    buildToolInfo.getRevision();
+                        }
+                    }
+                }
+            }
 
             markProject(AdtConstants.MARKER_ADT, errorMessage, IMarker.SEVERITY_ERROR);
             AdtPlugin.printErrorToConsole(project, errorMessage);

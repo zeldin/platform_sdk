@@ -35,27 +35,24 @@ endif
 
 $(call emugl-begin-host-static-library,libGLcommon)
 
-$(call emugl-import,libOpenglOsUtils)
 translator_path := $(LOCAL_PATH)/..
 LOCAL_SRC_FILES := $(host_common_SRC_FILES)
 $(call emugl-export,LDLIBS,$(host_common_LDLIBS))
 $(call emugl-export,LDFLAGS,$(host_common_LDFLAGS))
 $(call emugl-export,C_INCLUDES,$(LOCAL_PATH)/../include $(EMUGL_PATH)/shared)
-$(call emugl-export,STATIC_LIBRARIES, libcutils libutils liblog)
+$(call emugl-export,STATIC_LIBRARIES, libemugl_common)
 
 $(call emugl-end-module)
 
 
 ### EGL host implementation, 64-bit ################
+$(call emugl-begin-host64-static-library,lib64GLcommon)
 
-$(call emugl-begin-host-static-library,lib64GLcommon)
-
-$(call emugl-import,lib64OpenglOsUtils)
 translator_path := $(LOCAL_PATH)/..
 LOCAL_SRC_FILES := $(host_common_SRC_FILES)
 $(call emugl-export,LDLIBS,$(host_common_LDLIBS))
 $(call emugl-export,LDFLAGS,$(host_common_LDFLAGS))
 $(call emugl-export,C_INCLUDES,$(LOCAL_PATH)/../include $(EMUGL_PATH)/shared)
-$(call emugl-export,STATIC_LIBRARIES, lib64cutils lib64utils lib64log)
+$(call emugl-export,STATIC_LIBRARIES, lib64emugl_common)
 
 $(call emugl-end-module)

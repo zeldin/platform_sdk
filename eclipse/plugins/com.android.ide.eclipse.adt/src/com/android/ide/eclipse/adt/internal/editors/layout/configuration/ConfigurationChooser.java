@@ -58,6 +58,7 @@ import com.android.ide.eclipse.adt.internal.editors.layout.gle2.GraphicalEditorP
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.IncludeFinder.Reference;
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.LayoutCanvas;
 import com.android.ide.eclipse.adt.internal.editors.manifest.ManifestInfo;
+import com.android.ide.eclipse.adt.internal.editors.manifest.ManifestInfo.ActivityAttributes;
 import com.android.ide.eclipse.adt.internal.resources.ResourceHelper;
 import com.android.ide.eclipse.adt.internal.resources.manager.ProjectResources;
 import com.android.ide.eclipse.adt.internal.resources.manager.ResourceManager;
@@ -132,7 +133,7 @@ public class ConfigurationChooser extends Composite
     private int mDisableUpdates = 0;
 
     /** List of available devices */
-    private List<Device> mDeviceList = Collections.emptyList();
+    private Collection<Device> mDevices = Collections.emptyList();
 
     /** List of available targets */
     private final List<IAndroidTarget> mTargetList = new ArrayList<IAndroidTarget>();
@@ -382,8 +383,8 @@ public class ConfigurationChooser extends Composite
      * @return a list of {@link Device} objects
      */
     @NonNull
-    public List<Device> getDeviceList() {
-        return mDeviceList;
+    public Collection<Device> getDevices() {
+        return mDevices;
     }
 
     /**
@@ -872,9 +873,9 @@ public class ConfigurationChooser extends Composite
             // This method can be called more than once, so avoid duplicate entries
             manager.unregisterListener(this);
             manager.registerListener(this);
-            mDeviceList = manager.getDevices(DeviceManager.ALL_DEVICES);
+            mDevices = manager.getDevices(DeviceManager.ALL_DEVICES);
         } else {
-            mDeviceList = new ArrayList<Device>();
+            mDevices = new ArrayList<Device>();
         }
     }
 
@@ -915,7 +916,7 @@ public class ConfigurationChooser extends Composite
     }
 
     private void updateDevices() {
-        if (mDeviceList.size() == 0) {
+        if (mDevices.size() == 0) {
             initDevices();
         }
     }
@@ -1369,9 +1370,9 @@ public class ConfigurationChooser extends Composite
     public void onDevicesChanged() {
         final Sdk sdk = Sdk.getCurrent();
         if (sdk != null) {
-            mDeviceList = sdk.getDeviceManager().getDevices(DeviceManager.ALL_DEVICES);
+            mDevices = sdk.getDeviceManager().getDevices(DeviceManager.ALL_DEVICES);
         } else {
-            mDeviceList = new ArrayList<Device>();
+            mDevices = new ArrayList<Device>();
         }
     }
 
@@ -1586,8 +1587,11 @@ public class ConfigurationChooser extends Composite
 
         // See if there is a default theme assigned to this activity, and if so, use it
         ManifestInfo manifest = ManifestInfo.get(mEditedFile.getProject());
-        Map<String, String> activityThemes = manifest.getActivityThemes();
-        String preferred = activityThemes.get(activity);
+        String preferred = null;
+        ActivityAttributes attributes = manifest.getActivityAttributes(activity);
+        if (attributes != null) {
+            preferred = attributes.getTheme();
+        }
         if (preferred != null && !Objects.equal(preferred, mConfiguration.getTheme())) {
             // Yes, switch to it
             selectTheme(preferred);

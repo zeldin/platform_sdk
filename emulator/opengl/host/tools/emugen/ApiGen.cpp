@@ -30,6 +30,10 @@
  */
 #define WITH_LARGE_SUPPORT  1
 
+// Set to 1 to ensure buffers passed to/from EGL/GL are properly aligned.
+// This prevents crashes with certain backends (e.g. OSMesa).
+#define USE_ALIGNED_BUFFERS 1
+
 EntryPoint * ApiGen::findEntryByName(const std::string & name)
 {
     EntryPoint * entry = NULL;
@@ -106,7 +110,7 @@ int ApiGen::genFuncTable(const std::string &filename, SideType side)
     fprintf(fp, "#ifndef __%s_%s_ftable_t_h\n", m_basename.c_str(), sideString(side));
     fprintf(fp, "#define __%s_%s_ftable_t_h\n", m_basename.c_str(), sideString(side));
     fprintf(fp, "\n\n");
-    fprintf(fp, "static struct _%s_funcs_by_name {\n", m_basename.c_str());
+    fprintf(fp, "static const struct _%s_funcs_by_name {\n", m_basename.c_str());
     fprintf(fp,
             "\tconst char *name;\n" \
             "\tvoid *proc;\n" \
@@ -119,7 +123,7 @@ int ApiGen::genFuncTable(const std::string &filename, SideType side)
         fprintf(fp, "\t{\"%s\", (void*)%s},\n", e->name().c_str(), e->name().c_str());
     }
     fprintf(fp, "};\n");
-    fprintf(fp, "static int %s_num_funcs = sizeof(%s_funcs_by_name) / sizeof(struct _%s_funcs_by_name);\n",
+    fprintf(fp, "static const int %s_num_funcs = sizeof(%s_funcs_by_name) / sizeof(struct _%s_funcs_by_name);\n",
             m_basename.c_str(), m_basename.c_str(), m_basename.c_str());
     fprintf(fp, "\n\n#endif\n");
     return 0;
@@ -152,15 +156,6 @@ int ApiGen::genContext(const std::string & filename, SideType side)
         EntryPoint *e = &at(i);
         fprintf(fp, "\t%s_%s_proc_t %s;\n", e->name().c_str(), sideString(side), e->name().c_str());
     }
-    // accessors
-    fprintf(fp, "\t//Accessors \n");
-
-    for (size_t i = 0; i < size(); i++) {
-        EntryPoint *e = &at(i);
-        const char *n = e->name().c_str();
-        const char *s = sideString(side);
-        fprintf(fp, "\tvirtual %s_%s_proc_t set_%s(%s_%s_proc_t f) { %s_%s_proc_t retval = %s; %s = f; return retval;}\n", n, s, n, n, s, n, s,  n, n);
-    }
 
     // virtual destructor
     fprintf(fp, "\t virtual ~%s_%s_context_t() {}\n", m_basename.c_str(), sideString(side));
@@ -176,7 +171,7 @@ int ApiGen::genContext(const std::string & filename, SideType side)
 
     //client site set error virtual func
     if (side == CLIENT_SIDE) {
-        fprintf(fp, "\tvirtual void setError(unsigned int  error){};\n");
+        fprintf(fp, "\tvirtual void setError(unsigned int  error){ (void)error; };\n");
         fprintf(fp, "\tvirtual unsigned int getError(){ return 0; };\n");
     }
 
@@ -224,7 +219,7 @@ int ApiGen::genEntryPoints(const std::string & filename, SideType side)
     fprintf(fp,
             "void %s_%s_context_t::setContextAccessor(CONTEXT_ACCESSOR_TYPE *f) { getCurrentContext = f; }\n",
             m_basename.c_str(), sideString(side));
-    fprintf(fp, "#define GET_CONTEXT %s_%s_context_t * ctx = getCurrentContext() \n",
+    fprintf(fp, "#define GET_CONTEXT %s_%s_context_t * ctx = getCurrentContext()\n",
                 m_basename.c_str(), sideString(side));
     fprintf(fp, "#endif\n\n");
 
@@ -233,7 +228,7 @@ int ApiGen::genEntryPoints(const std::string & filename, SideType side)
         EntryPoint *e = &at(i);
         e->print(fp);
         fprintf(fp, "{\n");
-        fprintf(fp, "\tGET_CONTEXT; \n");
+        fprintf(fp, "\tGET_CONTEXT;\n");
 
         bool shouldReturn = !e->retval().isVoid();
         bool shouldCallWithContext = (side == CLIENT_SIDE);
@@ -244,7 +239,7 @@ int ApiGen::genEntryPoints(const std::string & filename, SideType side)
                     fprintf(fp, "\t%s\n", e->vars()[j].paramCheckExpression().c_str());
             }
         }
-        fprintf(fp, "\t %sctx->%s(%s",
+        fprintf(fp, "\t%sctx->%s(%s",
                 shouldReturn ? "return " : "",
                 e->name().c_str(),
                 shouldCallWithContext ? "ctx" : "");
@@ -330,18 +325,10 @@ int ApiGen::genEncoderHeader(const std::string &filename)
             classname.c_str(), m_basename.c_str(), sideString(CLIENT_SIDE));
     fprintf(fp, "\tIOStream *m_stream;\n\n");
 
-    fprintf(fp, "\t%s(IOStream *stream);\n\n", classname.c_str());
-    fprintf(fp, "\n};\n\n");
+    fprintf(fp, "\t%s(IOStream *stream);\n", classname.c_str());
+    fprintf(fp, "};\n\n");
 
-    fprintf(fp,"extern \"C\" {\n");
-
-    for (size_t i = 0; i < size(); i++) {
-        fprintf(fp, "\t");
-        at(i).print(fp, false, "_enc", /* classname + "::" */"", "void *self");
-        fprintf(fp, ";\n");
-    }
-    fprintf(fp, "};\n");
-    fprintf(fp, "#endif");
+    fprintf(fp, "#endif  // GUARD_%s", classname.c_str());
 
     fclose(fp);
     return 0;
@@ -420,8 +407,8 @@ static void writeVarEncodingExpression(Var& var, FILE* fp)
         if (!var.isVoid()) {
             fprintf(fp, "\t\tmemcpy(ptr, &%s, %u); ptr += %u;\n",
                     varname,
-                    (uint) var.type()->bytes(),
-                    (uint) var.type()->bytes());
+                    (unsigned) var.type()->bytes(),
+                    (unsigned) var.type()->bytes());
         }
     }
 }
@@ -458,15 +445,20 @@ int ApiGen::genEncoderImpl(const std::string &filename)
     fprintf(fp, "\n\n#include <string.h>\n");
     fprintf(fp, "#include \"%s_opcodes.h\"\n\n", m_basename.c_str());
     fprintf(fp, "#include \"%s_enc.h\"\n\n\n", m_basename.c_str());
-    fprintf(fp, "#include <stdio.h>\n");
-    std::string classname = m_basename + "_encoder_context_t";
-    size_t n = size();
+    fprintf(fp, "#include <stdio.h>\n\n");
+    fprintf(fp, "namespace {\n\n");
 
     // unsupport printout
     fprintf(fp,
-            "static void enc_unsupported()\n{\n\tALOGE(\"Function is unsupported\\n\");\n}\n\n");
+            "void enc_unsupported()\n"
+            "{\n"
+            "\tALOGE(\"Function is unsupported\\n\");\n"
+            "}\n\n");
 
     // entry points;
+    std::string classname = m_basename + "_encoder_context_t";
+
+    size_t n = size();
     for (size_t i = 0; i < n; i++) {
         EntryPoint *e = &at(i);
 
@@ -638,18 +630,26 @@ int ApiGen::genEncoderImpl(const std::string &filename)
             }
         }
 //XXX       fprintf(fp, "\n\tDBG(\"<<<< %s\\n\");\n", e->name().c_str());
+
         // todo - return value for pointers
         if (e->retval().isPointer()) {
             fprintf(stderr, "WARNING: %s : return value of pointer is unsupported\n",
                     e->name().c_str());
+            if (e->flushOnEncode()) {
+                fprintf(fp, "\tstream->flush();\n");
+            }
             fprintf(fp, "\t return NULL;\n");
         } else if (e->retval().type()->name() != "void") {
             fprintf(fp, "\n\t%s retval;\n", e->retval().type()->name().c_str());
-            fprintf(fp, "\tstream->readback(&retval, %u);\n",(uint) e->retval().type()->bytes());
+            fprintf(fp, "\tstream->readback(&retval, %u);\n",(unsigned) e->retval().type()->bytes());
             fprintf(fp, "\treturn retval;\n");
+        } else if (e->flushOnEncode()) {
+            fprintf(fp, "\tstream->flush();\n");
         }
         fprintf(fp, "}\n\n");
     }
+
+    fprintf(fp, "}  // namespace\n\n");
 
     // constructor
     fprintf(fp, "%s::%s(IOStream *stream)\n{\n", classname.c_str(), classname.c_str());
@@ -658,19 +658,17 @@ int ApiGen::genEncoderImpl(const std::string &filename)
     for (size_t i = 0; i < n; i++) {
         EntryPoint *e = &at(i);
         if (e->unsupported()) {
-            fprintf(fp, "\tset_%s((%s_%s_proc_t)(enc_unsupported));\n", e->name().c_str(), e->name().c_str(), sideString(CLIENT_SIDE));
+            fprintf(fp, 
+                    "\tthis->%s = (%s_%s_proc_t) &enc_unsupported;\n",
+                    e->name().c_str(),
+                    e->name().c_str(),
+                    sideString(CLIENT_SIDE));
         } else {
-            fprintf(fp, "\tset_%s(%s_enc);\n", e->name().c_str(), e->name().c_str());
+            fprintf(fp,
+                    "\tthis->%s = &%s_enc;\n",
+                    e->name().c_str(),
+                    e->name().c_str());
         }
-        /**
-           if (e->unsupsported()) {
-           fprintf(fp, "\tmemcpy((void *)(&%s), (const void *)(&enc_unsupported), sizeof(%s));\n",
-           e->name().c_str(),
-           e->name().c_str());
-           } else {
-           fprintf(fp, "\t%s = %s_enc;\n", e->name().c_str(), e->name().c_str());
-           }
-        **/
     }
     fprintf(fp, "}\n\n");
 
@@ -705,7 +703,7 @@ int ApiGen::genDecoderHeader(const std::string &filename)
             classname.c_str(), m_basename.c_str(), sideString(SERVER_SIDE));
     fprintf(fp, "\tsize_t decode(void *buf, size_t bufsize, IOStream *stream);\n");
     fprintf(fp, "\n};\n\n");
-    fprintf(fp, "#endif\n");
+    fprintf(fp, "#endif  // GUARD_%s\n", classname.c_str());
 
     fclose(fp);
     return 0;
@@ -728,15 +726,13 @@ int ApiGen::genContextImpl(const std::string &filename, SideType side)
 
     // init function;
     fprintf(fp, "int %s::initDispatchByName(void *(*getProc)(const char *, void *userData), void *userData)\n{\n", classname.c_str());
-    fprintf(fp, "\tvoid *ptr;\n\n");
     for (size_t i = 0; i < n; i++) {
         EntryPoint *e = &at(i);
-        fprintf(fp, "\tptr = getProc(\"%s\", userData); set_%s((%s_%s_proc_t)ptr);\n",
+        fprintf(fp, "\t%s = (%s_%s_proc_t) getProc(\"%s\", userData);\n",
                 e->name().c_str(),
                 e->name().c_str(),
-                e->name().c_str(),
-                sideString(side));
-
+                sideString(side),
+                e->name().c_str());
     }
     fprintf(fp, "\treturn 0;\n");
     fprintf(fp, "}\n\n");
@@ -761,8 +757,6 @@ int ApiGen::genDecoderImpl(const std::string &filename)
     fprintf(fp, "\n\n#include <string.h>\n");
     fprintf(fp, "#include \"%s_opcodes.h\"\n\n", m_basename.c_str());
     fprintf(fp, "#include \"%s_dec.h\"\n\n\n", m_basename.c_str());
-    fprintf(fp, "#include <stdio.h>\n\n");
-    fprintf(fp, "typedef unsigned int tsize_t; // Target \"size_t\", which is 32-bit for now. It may or may not be the same as host's size_t when emugen is compiled.\n\n");
 
     fprintf(fp, "#ifdef __BIG_ENDIAN__\n");
     fprintf(fp, "template<class T> static inline T swap64(const T& n)\n{\n  union { T a; uint64_t b; } v;\n  v.b = __builtin_bswap64(*(uint64_t *)&n);\n  return v.a;\n}\n");
@@ -780,6 +774,28 @@ int ApiGen::genDecoderImpl(const std::string &filename)
     fprintf(fp, "template<class T> static inline void swap_array(T* a, size_t sz)\n{}\n");
     fprintf(fp, "#endif\n\n");
 
+    fprintf(fp, "#include \"ProtocolUtils.h\"\n\n");
+    fprintf(fp, "#include <stdio.h>\n\n");
+    fprintf(fp, "typedef unsigned int tsize_t; // Target \"size_t\", which is 32-bit for now. It may or may not be the same as host's size_t when emugen is compiled.\n\n");
+
+    // helper macros
+    fprintf(fp,
+            "#ifdef DEBUG_PRINTOUT\n"
+            "#  define DEBUG(...) fprintf(stderr, __VA_ARGS__)\n"
+            "#else\n"
+            "#  define DEBUG(...)  ((void)0)\n"
+            "#endif\n\n");
+
+    fprintf(fp,
+            "#ifdef CHECK_GLERROR\n"
+            "#  define SET_LASTCALL(name)  sprintf(lastCall, #name)\n"
+            "#else\n"
+            "#  define SET_LASTCALL(name)  ((void)0)\n"
+            "#endif\n\n");
+
+    // helper templates
+    fprintf(fp, "using namespace emugl;\n\n");
+
     // decoder switch;
     fprintf(fp, "size_t %s::decode(void *buf, size_t len, IOStream *stream)\n{\n", classname.c_str());
     fprintf(fp,
@@ -792,15 +808,22 @@ int ApiGen::genDecoderImpl(const std::string &filename)
 \tchar lastCall[256] = {0}; \n\
 #endif \n\
 \twhile ((len - pos >= 8) && !unknownOpcode) {   \n\
-\t\tvoid *params[%u]; \n\
-\t\tint opcode = swap(*(int *)ptr);   \n\
-\t\tunsigned int packetLen = swap(*(int *)(ptr + 4));\n\
+\t\tuint32_t opcode = swap(*(uint32_t *)ptr);   \n\
+\t\tsize_t packetLen = swap(*(uint32_t *)(ptr + 4));\n\
 \t\tif (len - pos < packetLen)  return pos; \n\
-\t\tswitch(opcode) {\n",
-            (uint) m_maxEntryPointsParams);
+\t\tswitch(opcode) {\n");
 
     for (size_t f = 0; f < n; f++) {
-        enum Pass_t { PASS_TmpBuffAlloc = 0, PASS_MemAlloc, PASS_DebugPrint, PASS_FunctionCall, PASS_Epilog, PASS_LAST };
+        enum Pass_t {
+            PASS_FIRST = 0,
+            PASS_VariableDeclarations = PASS_FIRST,
+            PASS_TmpBuffAlloc,
+            PASS_MemAlloc,
+            PASS_DebugPrint,
+            PASS_FunctionCall,
+            PASS_FlushOutput,
+            PASS_Epilog,
+            PASS_LAST };
         EntryPoint *e = &at(f);
 
         // construct a printout string;
@@ -812,8 +835,7 @@ int ApiGen::genDecoderImpl(const std::string &filename)
         printString += "";
         // TODO - add for return value;
 
-        fprintf(fp, "\t\t\tcase OP_%s:\n", e->name().c_str());
-        fprintf(fp, "\t\t\t{\n");
+        fprintf(fp, "\t\tcase OP_%s: {\n", e->name().c_str());
 
         bool totalTmpBuffExist = false;
         std::string totalTmpBuffOffset = "0";
@@ -825,8 +847,10 @@ int ApiGen::genDecoderImpl(const std::string &filename)
             retvalType = e->retval().type()->name();
         }
 
-        for (int pass = PASS_TmpBuffAlloc; pass < PASS_LAST; pass++) {
-            if (pass == PASS_FunctionCall && !e->retval().isVoid() && !e->retval().isPointer()) {
+        for (int pass = PASS_FIRST; pass < PASS_LAST; pass++) {
+            if (pass == PASS_FunctionCall &&
+                !e->retval().isVoid() &&
+                !e->retval().isPointer()) {
                 fprintf(fp, "\t\t\t*(%s *)(&tmpBuf[%s]) = swap(", retvalType.c_str(),
                         totalTmpBuffOffset.c_str());
             }
@@ -838,9 +862,14 @@ int ApiGen::genDecoderImpl(const std::string &filename)
                     fprintf(fp, "this"); // add a context to the call
                 }
             } else if (pass == PASS_DebugPrint) {
-                fprintf(fp, "#ifdef DEBUG_PRINTOUT\n");
-                fprintf(fp, "\t\t\tfprintf(stderr,\"%s: %s(%s)\\n\"", m_basename.c_str(), e->name().c_str(), printString.c_str());
-                if (e->vars().size() > 0 && !e->vars()[0].isVoid()) fprintf(fp, ",");
+                fprintf(fp,
+                        "\t\t\tDEBUG(\"%s(%%p): %s(%s)\\n\", stream",
+                        m_basename.c_str(),
+                        e->name().c_str(),
+                        printString.c_str());
+                if (e->vars().size() > 0 && !e->vars()[0].isVoid()) {
+                    fprintf(fp, ",");
+                }
             }
 
             std::string varoffset = "8"; // skip the header
@@ -848,94 +877,239 @@ int ApiGen::genDecoderImpl(const std::string &filename)
             // allocate memory for out pointers;
             for (size_t j = 0; j < evars.size(); j++) {
                 Var *v = & evars[j];
-                if (!v->isVoid()) {
-                    if ((pass == PASS_FunctionCall) && (j != 0 || e->customDecoder())) fprintf(fp, ", ");
-                    if (pass == PASS_DebugPrint && j != 0) fprintf(fp, ", ");
+                if (v->isVoid()) {
+                    continue;
+                }
+                const char* var_name = v->name().c_str();
+                const char* var_type_name = v->type()->name().c_str();
+                const unsigned var_type_bytes = v->type()->bytes();
 
-                    if (!v->isPointer()) {
-                        if (pass == PASS_FunctionCall || pass == PASS_DebugPrint) {
-                            fprintf(fp, "swap(*(%s *)(ptr + %s))", v->type()->name().c_str(), varoffset.c_str());
-                        }
-                        varoffset += " + " + toString(v->type()->bytes());
-                    } else {
-                        if (v->pointerDir() == Var::POINTER_IN || v->pointerDir() == Var::POINTER_INOUT) {
-                            if (pass == PASS_MemAlloc && v->pointerDir() == Var::POINTER_INOUT) {
-                                fprintf(fp, "\t\t\tsize_t tmpPtr%uSize = (size_t)swap(*(unsigned int *)(ptr + %s));\n",
-                                        (uint) j, varoffset.c_str());
-                                fprintf(fp, "unsigned char *tmpPtr%u = (ptr + %s + 4);\n",
-                                        (uint) j, varoffset.c_str());
-                            }
-			    if (pass == PASS_MemAlloc) {
-                                fprintf(fp, "\t\t\tswap_array((%s)(ptr + %s + 4), swap(*(unsigned int *)(ptr + %s)));\n",
-                                        v->type()->name().c_str(), varoffset.c_str(),
-                                        varoffset.c_str());
-			    }
-                            if (pass == PASS_FunctionCall) {
-                                if (v->nullAllowed()) {
-                                    fprintf(fp, "*((unsigned int *)(ptr + %s)) == 0 ? NULL : (%s)(ptr + %s + 4)",
-                                            varoffset.c_str(), v->type()->name().c_str(), varoffset.c_str());
-                                } else {
-                                    fprintf(fp, "(%s)(ptr + %s + 4)",
-                                            v->type()->name().c_str(), varoffset.c_str());
-                                }
-                            } else if (pass == PASS_DebugPrint) {
-                                fprintf(fp, "(%s)(ptr + %s + 4), swap(*(unsigned int *)(ptr + %s))",
-                                        v->type()->name().c_str(), varoffset.c_str(),
-                                        varoffset.c_str());
-                            }
-                            varoffset += " + 4 + swap(*(tsize_t *)(ptr +" + varoffset + "))";
-                        } else { // out pointer;
-                            if (pass == PASS_TmpBuffAlloc) {
-                                fprintf(fp, "\t\t\tsize_t tmpPtr%uSize = (size_t)swap(*(unsigned int *)(ptr + %s));\n",
-                                        (uint) j, varoffset.c_str());
-                                if (!totalTmpBuffExist) {
-                                    fprintf(fp, "\t\t\tsize_t totalTmpSize = tmpPtr%uSize;\n", (uint)j);
-                                } else {
-                                    fprintf(fp, "\t\t\ttotalTmpSize += tmpPtr%uSize;\n", (uint)j);
-                                }
-                                tmpBufOffset[j] = totalTmpBuffOffset;
-                                char tmpPtrName[16];
-                                sprintf(tmpPtrName," + tmpPtr%uSize", (uint)j);
-                                totalTmpBuffOffset += std::string(tmpPtrName);
-                                totalTmpBuffExist = true;
-                            } else if (pass == PASS_MemAlloc) {
-                                fprintf(fp, "\t\t\tunsigned char *tmpPtr%u = &tmpBuf[%s];\n",
-                                        (uint)j, tmpBufOffset[j].c_str());
-                            } else if (pass == PASS_FunctionCall) {
-                                if (v->nullAllowed()) {
-                                    fprintf(fp, "tmpPtr%uSize == 0 ? NULL : (%s)(tmpPtr%u)",
-                                            (uint) j, v->type()->name().c_str(), (uint) j);
-                                } else {
-                                    fprintf(fp, "(%s)(tmpPtr%u)", v->type()->name().c_str(), (uint) j);
-                                }
-                            } else if (pass == PASS_DebugPrint) {
-                                fprintf(fp, "(%s)(tmpPtr%u), swap(*(unsigned int *)(ptr + %s))",
-                                        v->type()->name().c_str(), (uint) j,
-                                        varoffset.c_str());
-                            } else if (pass == PASS_Epilog) {
-			        fprintf(fp, "\t\t\tswap_array((%s)tmpPtr%u, tmpPtr%uSize);\n", v->type()->name().c_str(), (uint) j, (uint) j);
-			    }
-                            varoffset += " + 4";
-                        }
+                if ((pass == PASS_FunctionCall) &&
+                    (j != 0 || e->customDecoder())) {
+                    fprintf(fp, ", ");
+                }
+                if (pass == PASS_DebugPrint && j != 0) {
+                    fprintf(fp, ", ");
+                }
+
+                if (!v->isPointer()) {
+                    if (pass == PASS_VariableDeclarations) {
+                        fprintf(fp,
+                                "\t\t\t%s var_%s = Unpack<%s,uint%u_t>(ptr + %s);\n",
+                                var_type_name,
+                                var_name,
+                                var_type_name,
+                                var_type_bytes * 8U,
+                                varoffset.c_str());
                     }
+
+                    if (pass == PASS_FunctionCall ||
+                        pass == PASS_DebugPrint) {
+                        fprintf(fp, "var_%s", var_name);
+                    }
+                    varoffset += " + " + toString(var_type_bytes);
+                    continue;
+                }
+
+                if (pass == PASS_VariableDeclarations) {
+                    fprintf(fp,
+                            "\t\t\tuint32_t size_%s __attribute__((unused)) = Unpack<uint32_t,uint32_t>(ptr + %s);\n",
+                            var_name,
+                            varoffset.c_str());
+                }
+
+                if (v->pointerDir() == Var::POINTER_IN ||
+                    v->pointerDir() == Var::POINTER_INOUT) {
+                    if (pass == PASS_VariableDeclarations) {
+#if USE_ALIGNED_BUFFERS
+                        fprintf(fp,
+                                "\t\t\tInputBuffer inptr_%s(ptr + %s + 4, size_%s);\n",
+                                var_name,
+                                varoffset.c_str(),
+                                var_name);
+#ifdef __BIG_ENDIAN__
+			fprintf(fp,
+				"\t\t\tswap_array((%s)(void*)(inptr_%s.get()), size_%s);\n",
+				v->type()->name().c_str(),
+				var_name,
+				var_name);
+#endif			
+                    }
+                    if (pass == PASS_FunctionCall) {
+                        if (v->nullAllowed()) {
+                            fprintf(fp,
+                                    "size_%s == 0 ? NULL : (%s)(inptr_%s.get())",
+                                    var_name,
+                                    var_type_name,
+                                    var_name);
+                        } else {
+                            fprintf(fp,
+                                    "(%s)(inptr_%s.get())",
+                                    var_type_name,
+                                    var_name);
+                        }
+                    } else if (pass == PASS_DebugPrint) {
+                        fprintf(fp,
+                                "(%s)(inptr_%s.get()), size_%s",
+                                var_type_name,
+                                var_name,
+                                var_name);
+                    }
+#else  // !USE_ALIGNED_BUFFERS
+                        fprintf(fp,
+                                "unsigned char *inptr_%s = (ptr + %s + 4);\n",
+                                var_name,
+                                varoffset.c_str());
+#ifdef __BIG_ENDIAN__
+			fprintf(fp,
+				"\t\t\tswap_array((%s)(inptr_%s), size_%s);\n",
+				v->type()->name().c_str(),
+				var_name);
+				var_name);
+#endif
+                    }
+                    if (pass == PASS_FunctionCall) {
+                        if (v->nullAllowed()) {
+                            fprintf(fp,
+                                    "size_%s == 0 ? NULL : (%s)(inptr_%s)",
+                                    var_name,
+                                    var_type_name,
+                                    var_name);
+                        } else {
+                            fprintf(fp,
+                                    "(%s)(inptr_%s)",
+                                    var_type_name,
+                                    var_name);
+                        }
+                    } else if (pass == PASS_DebugPrint) {
+                        fprintf(fp,
+                                "(%s)(inptr_%s), size_%s",
+                                var_type_name,
+                                var_name,
+                                var_name);
+                    }
+#endif  // !USE_ALIGNED_BUFFERS
+                    varoffset += " + 4 + size_";
+                    varoffset += var_name;
+                } else { // out pointer;
+                    if (pass == PASS_TmpBuffAlloc) {
+                        if (!totalTmpBuffExist) {
+                            fprintf(fp,
+                                    "\t\t\tsize_t totalTmpSize = size_%s;\n",
+                                    var_name);
+                        } else {
+                            fprintf(fp,
+                                    "\t\t\ttotalTmpSize += size_%s;\n",
+                                    var_name);
+                        }
+                        tmpBufOffset[j] = totalTmpBuffOffset;
+                        totalTmpBuffOffset += " + size_";
+                        totalTmpBuffOffset += var_name;
+                        totalTmpBuffExist = true;
+                    } else if (pass == PASS_MemAlloc) {
+#if USE_ALIGNED_BUFFERS
+                        fprintf(fp,
+                                "\t\t\tOutputBuffer outptr_%s(&tmpBuf[%s], size_%s);\n",
+                                var_name,
+                                tmpBufOffset[j].c_str(),
+                                var_name);
+                    } else if (pass == PASS_FunctionCall) {
+                        if (v->nullAllowed()) {
+                            fprintf(fp,
+                                    "size_%s == 0 ? NULL : (%s)(outptr_%s.get())",
+                                    var_name,
+                                    var_type_name,
+                                    var_name);
+                        } else {
+                            fprintf(fp,
+                                    "(%s)(outptr_%s.get())",
+                                    var_type_name,
+                                    var_name);
+                        }
+                    } else if (pass == PASS_DebugPrint) {
+                        fprintf(fp,
+                                "(%s)(outptr_%s.get()), size_%s",
+                                var_type_name,
+                                var_name,
+                                var_name);
+                    }
+                    if (pass == PASS_FlushOutput) {
+#ifdef __BIG_ENDIAN__
+			fprintf(fp,
+				"\t\t\tswap_array((%s)(void*)(outptr_%s.get()), size_%s);\n",
+				v->type()->name().c_str(),
+				var_name,
+				var_name);
+#endif
+                        fprintf(fp,
+                                "\t\t\toutptr_%s.flush();\n",
+                                var_name);
+                    }
+#else  // !USE_ALIGNED_BUFFERS
+                        fprintf(fp,
+                                "\t\t\tunsigned char *outptr_%s = &tmpBuf[%s];\n",
+                                var_name,
+                                tmpBufOffset[j].c_str());
+                        fprintf(fp,
+                                "\t\t\tmemset(outptr_%s, 0, %s);\n",
+                                var_name,
+                                toString(v->type()->bytes()).c_str());
+                    } else if (pass == PASS_FunctionCall) {
+                        if (v->nullAllowed()) {
+                            fprintf(fp,
+                                    "size_%s == 0 ? NULL : (%s)(outptr_%s)",
+                                    var_name,
+                                    var_type_name,
+                                    var_name);
+                        } else {
+                            fprintf(fp,
+                                    "(%s)(outptr_%s)",
+                                    var_type_name,
+                                    var_name);
+                        }
+                    } else if (pass == PASS_DebugPrint) {
+                        fprintf(fp,
+                                "(%s)(outptr_%s), size_%s",
+                                var_type_name,
+                                var_name,
+                                varoffset.c_str());
+                    }
+#ifdef __BIG_ENDIAN__
+                    if (pass == PASS_FlushOutput) {
+			fprintf(fp,
+				"\t\t\tswap_array((%s)(outptr_%s), size_%s);\n",
+				v->type()->name().c_str(),
+				var_name);
+				var_name);
+		    }
+#endif
+#endif  // !USE_ALIGNED_BUFFERS
+                    varoffset += " + 4";
                 }
             }
 
             if (pass == PASS_FunctionCall && !e->retval().isVoid() && !e->retval().isPointer()) fprintf(fp, ")");
-            if (pass == PASS_FunctionCall || pass == PASS_DebugPrint) fprintf(fp, ");\n");
-            if (pass == PASS_DebugPrint) fprintf(fp, "#endif\n");
+            if (pass == PASS_FunctionCall ||
+                pass == PASS_DebugPrint) {
+                fprintf(fp, ");\n");
+            }
 
             if (pass == PASS_TmpBuffAlloc) {
                 if (!e->retval().isVoid() && !e->retval().isPointer()) {
                     if (!totalTmpBuffExist)
-                        fprintf(fp, "\t\t\tsize_t totalTmpSize = sizeof(%s);\n", retvalType.c_str());
+                        fprintf(fp,
+                                "\t\t\tsize_t totalTmpSize = sizeof(%s);\n",
+                                retvalType.c_str());
                     else
-                        fprintf(fp, "\t\t\ttotalTmpSize += sizeof(%s);\n", retvalType.c_str());
+                        fprintf(fp,
+                                "\t\t\ttotalTmpSize += sizeof(%s);\n",
+                                retvalType.c_str());
 
                     totalTmpBuffExist = true;
                 }
                 if (totalTmpBuffExist) {
-                    fprintf(fp, "\t\t\tunsigned char *tmpBuf = stream->alloc(totalTmpSize);\n");
+                    fprintf(fp,
+                            "\t\t\tunsigned char *tmpBuf = stream->alloc(totalTmpSize);\n");
                 }
             }
 
@@ -944,17 +1118,12 @@ int ApiGen::genDecoderImpl(const std::string &filename)
                 if (totalTmpBuffExist) {
                     fprintf(fp, "\t\t\tstream->flush();\n");
                 }
-
-                fprintf(fp, "\t\t\tpos += swap(*(int *)(ptr + 4));\n");
-                fprintf(fp, "\t\t\tptr += swap(*(int *)(ptr + 4));\n");
             }
 
         } // pass;
-        fprintf(fp, "\t\t\t}\n");
-        fprintf(fp, "#ifdef CHECK_GL_ERROR\n");
-        fprintf(fp, "\t\t\tsprintf(lastCall, \"%s\");\n", e->name().c_str());
-        fprintf(fp, "#endif\n");
+        fprintf(fp, "\t\t\tSET_LASTCALL(\"%s\");\n", e->name().c_str());
         fprintf(fp, "\t\t\tbreak;\n");
+        fprintf(fp, "\t\t}\n");
 
         delete [] tmpBufOffset;
     }
@@ -963,10 +1132,15 @@ int ApiGen::genDecoderImpl(const std::string &filename)
     fprintf(fp, "\t\t} //switch\n");
     if (strstr(m_basename.c_str(), "gl")) {
         fprintf(fp, "#ifdef CHECK_GL_ERROR\n");
-        fprintf(fp, "\tint err = this->glGetError();\n");
+        fprintf(fp, "\tint err = lastCall[0] ? this->glGetError() : GL_NO_ERROR;\n");
         fprintf(fp, "\tif (err) fprintf(stderr, \"%s Error: 0x%%X in %%s\\n\", err, lastCall);\n", m_basename.c_str());
         fprintf(fp, "#endif\n");
     }
+
+    fprintf(fp, "\t\tif (!unknownOpcode) {\n");
+    fprintf(fp, "\t\t\tpos += packetLen;\n");
+    fprintf(fp, "\t\t\tptr += packetLen;\n");
+    fprintf(fp, "\t\t}\n");
     fprintf(fp, "\t} // while\n");
     fprintf(fp, "\treturn pos;\n");
     fprintf(fp, "}\n");
@@ -1060,7 +1234,7 @@ int ApiGen::setGlobalAttribute(const std::string & line, size_t lc)
     if (token == "base_opcode") {
         std::string str = getNextToken(line, pos, &last, WHITESPACE);
         if (str.size() == 0) {
-            fprintf(stderr, "line %u: missing value for base_opcode\n", (uint) lc);
+            fprintf(stderr, "line %u: missing value for base_opcode\n", (unsigned) lc);
         } else {
             setBaseOpcode(atoi(str.c_str()));
         }

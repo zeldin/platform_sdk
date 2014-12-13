@@ -19,7 +19,7 @@
 #include "ColorBuffer.h"
 #include "RenderContext.h"
 #include "FBConfig.h"
-#include "SmartPtr.h"
+#include "emugl/common/smart_ptr.h"
 #include "FixedBuffer.h"
 #include <EGL/egl.h>
 #include <GLES/gl.h>
@@ -38,13 +38,13 @@ public:
     EGLSurface getEGLSurface() const { return m_eglSurface; }
 
     void setColorBuffer(ColorBufferPtr p_colorBuffer);
-    void flushColorBuffer();
+    bool flushColorBuffer();
     void bind(RenderContextPtr p_ctx, SurfaceBindType p_bindType);
 
 private:
     WindowSurface();
 
-    void blitToColorBuffer();  // copy pbuffer content with texload and blit
+    bool blitToColorBuffer();  // copy pbuffer content with texload and blit
     bool resizePbuffer(unsigned int p_width, unsigned int p_height);
 
 private:
@@ -66,6 +66,6 @@ private:
     const FBConfig *m_fbconf;
 };
 
-typedef SmartPtr<WindowSurface> WindowSurfacePtr;
+typedef emugl::SmartPtr<WindowSurface> WindowSurfacePtr;
 
 #endif

@@ -21,6 +21,7 @@ import static com.android.ide.eclipse.adt.AdtUtils.extractClassName;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.NewTemplatePage.WIZARD_PAGE_WIDTH;
 
 import com.android.annotations.Nullable;
+import com.android.sdklib.SdkVersionInfo;
 import com.android.ide.eclipse.adt.AdtPlugin;
 import com.android.ide.eclipse.adt.AdtUtils;
 import com.android.ide.eclipse.adt.internal.editors.IconFactory;
@@ -29,6 +30,7 @@ import com.android.ide.eclipse.adt.internal.wizards.newproject.ApplicationInfoPa
 import com.android.ide.eclipse.adt.internal.wizards.newproject.ProjectNamePage;
 import com.android.sdklib.AndroidVersion;
 import com.android.sdklib.IAndroidTarget;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import org.eclipse.core.resources.IResource;
@@ -62,8 +64,6 @@ import org.eclipse.swt.widgets.Text;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import lombok.ast.libs.org.parboiled.google.collect.Lists;
 
 /**
  * First wizard page in the "New Project From Template" wizard
@@ -551,7 +551,9 @@ public class NewProjectPage extends WizardPage
                 try {
                     minSdk = Integer.parseInt(mValues.minSdk);
                 } catch (NumberFormatException nufe) {
-                    minSdk = 1;
+                    // If not a number, then the string is a codename, so treat it
+                    // as a preview version.
+                    minSdk = SdkVersionInfo.HIGHEST_KNOWN_API + 1;
                 }
             }
             mValues.iconState.minSdk = minSdk.intValue();

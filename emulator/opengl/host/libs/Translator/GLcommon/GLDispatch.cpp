@@ -16,7 +16,7 @@
 
 #include <GLcommon/GLDispatch.h>
 #include <stdio.h>
-#include <OpenglOsUtils/osDynLibrary.h>
+#include "emugl/common/shared_library.h"
 
 #ifdef __linux__
 #include <GL/glx.h>
@@ -31,13 +31,13 @@ typedef void (*GL_FUNC_PTR)();
 static GL_FUNC_PTR getGLFuncAddress(const char *funcName) {
     GL_FUNC_PTR ret = NULL;
 #ifdef __linux__
-    static osUtils::dynLibrary* libGL = osUtils::dynLibrary::open("libGL.so");
+    static emugl::SharedLibrary* libGL = emugl::SharedLibrary::open("libGL");
     ret = (GL_FUNC_PTR)glXGetProcAddress((const GLubyte*)funcName);
 #elif defined(WIN32)
-    static osUtils::dynLibrary* libGL = osUtils::dynLibrary::open("opengl32");
+    static emugl::SharedLibrary* libGL = emugl::SharedLibrary::open("opengl32");
     ret = (GL_FUNC_PTR)wglGetProcAddress(funcName);
 #elif defined(__APPLE__)
-    static osUtils::dynLibrary* libGL = osUtils::dynLibrary::open("/System/Library/Frameworks/OpenGL.framework/OpenGL");
+    static emugl::SharedLibrary* libGL = emugl::SharedLibrary::open("/System/Library/Frameworks/OpenGL.framework/OpenGL");
 #endif
     if(!ret && libGL){
         ret = libGL->findSymbol(funcName);
@@ -45,29 +45,30 @@ static GL_FUNC_PTR getGLFuncAddress(const char *funcName) {
     return ret;
 }
 
-#define LOAD_GL_FUNC(name)  {   void * funcAddrs = NULL;                                    \
-                                if(name == NULL){                                           \
-                                    funcAddrs = (void *)getGLFuncAddress(#name);            \
-                                    if(funcAddrs){                                          \
-                                        *(void**)(&name) = funcAddrs;                       \
-                                    } else {                                                \
-                                        fprintf(stderr,"could not load func %s\n",#name);   \
-                                        *(void**)(&name) = (void *)dummy_##name;            \
-                                    }                                                       \
-                                }                                                           \
-                           }
+#define LOAD_GL_FUNC(name)  do { \
+        if (!name) { \
+            void* funcAddress = (void *)getGLFuncAddress(#name); \
+            if (funcAddress) { \
+                name = (__typeof__(name))(funcAddress); \
+            } else { \
+                fprintf(stderr, "Could not load func %s\n", #name); \
+                name = (__typeof__(name))(dummy_##name); \
+            } \
+        } \
+    } while (0)
 
-#define LOAD_GLEXT_FUNC(name)  {   void * funcAddrs = NULL;                                \
-                                if(name == NULL){                                       \
-                                funcAddrs = (void *)getGLFuncAddress(#name);            \
-                                if(funcAddrs)                                           \
-                                    *(void**)(&name) = funcAddrs;                       \
-                                }                                                       \
-                           }
+#define LOAD_GLEXT_FUNC(name) do { \
+        if (!name) { \
+            void* funcAddress = (void *)getGLFuncAddress(#name); \
+            if (funcAddress) { \
+                name = (__typeof__(name))(funcAddress); \
+            } \
+        } \
+    } while (0)
 
 /* initializing static GLDispatch members*/
 
-android::Mutex GLDispatch::s_lock;
+emugl::Mutex GLDispatch::s_lock;
 void (GLAPIENTRY *GLDispatch::glActiveTexture)(GLenum) = NULL;
 void (GLAPIENTRY *GLDispatch::glBindBuffer)(GLenum,GLuint) = NULL;
 void (GLAPIENTRY *GLDispatch::glBindTexture)(GLenum, GLuint) = NULL;
@@ -292,13 +293,13 @@ void (GL_APIENTRY *GLDispatch::glGetUniformiv)(GLuint,GLint,GLint*) = NULL;
 int  (GL_APIENTRY *GLDispatch::glGetUniformLocation)(GLuint,const GLchar*) = NULL;
 void (GL_APIENTRY *GLDispatch::glReleaseShaderCompiler)() = NULL;
 void (GL_APIENTRY *GLDispatch::glShaderBinary)(GLsizei,const GLuint*,GLenum,const GLvoid*,GLsizei) = NULL;
-void (GL_APIENTRY *GLDispatch::glShaderSource)(GLuint,GLsizei,const GLchar**,const GLint*) = NULL;
+void (GL_APIENTRY *GLDispatch::glShaderSource)(GLuint,GLsizei,const GLchar* const*,const GLint*) = NULL;
 
 GLDispatch::GLDispatch():m_isLoaded(false){};
 
 
 void GLDispatch::dispatchFuncs(GLESVersion version){
-    android::Mutex::Autolock mutex(s_lock);
+    emugl::Mutex::AutoLock mutex(s_lock);
     if(m_isLoaded)
         return;
 

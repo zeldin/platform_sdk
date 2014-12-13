@@ -30,6 +30,8 @@ import static com.android.SdkConstants.VIEW_INCLUDE;
 
 import com.android.SdkConstants;
 import com.android.ide.common.rendering.LayoutLibrary;
+import com.android.ide.common.rendering.RenderSecurityManager;
+import com.android.ide.common.rendering.api.ActionBarCallback;
 import com.android.ide.common.rendering.api.AdapterBinding;
 import com.android.ide.common.rendering.api.DataBindingItem;
 import com.android.ide.common.rendering.api.ILayoutPullParser;
@@ -43,6 +45,7 @@ import com.android.ide.common.resources.ResourceResolver;
 import com.android.ide.common.xml.ManifestData;
 import com.android.ide.eclipse.adt.AdtConstants;
 import com.android.ide.eclipse.adt.AdtPlugin;
+import com.android.ide.eclipse.adt.internal.editors.layout.gle2.GraphicalEditorPart;
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.LayoutMetadata;
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.RenderLogger;
 import com.android.ide.eclipse.adt.internal.editors.layout.uimodel.UiViewElementNode;
@@ -82,15 +85,16 @@ public final class ProjectCallback extends LegacyCallback {
     private final IProject mProject;
     private final ClassLoader mParentClassLoader;
     private final ProjectResources mProjectRes;
+    private final Object mCredential;
     private boolean mUsed = false;
     private String mNamespace;
     private ProjectClassLoader mLoader = null;
     private LayoutLog mLogger;
     private LayoutLibrary mLayoutLib;
-
     private String mLayoutName;
     private ILayoutPullParser mLayoutEmbeddedParser;
     private ResourceResolver mResourceResolver;
+    private GraphicalEditorPart mEditor;
 
     /**
      * Creates a new {@link ProjectCallback} to be used with the layout lib.
@@ -98,13 +102,17 @@ public final class ProjectCallback extends LegacyCallback {
      * @param layoutLib The layout library this callback is going to be invoked from
      * @param projectRes the {@link ProjectResources} for the project.
      * @param project the project.
+     * @param credential the sandbox credential
      */
     public ProjectCallback(LayoutLibrary layoutLib,
-            ProjectResources projectRes, IProject project) {
+            ProjectResources projectRes, IProject project, Object credential,
+            GraphicalEditorPart editor) {
         mLayoutLib = layoutLib;
         mParentClassLoader = layoutLib.getClassLoader();
         mProjectRes = projectRes;
         mProject = project;
+        mCredential = credential;
+        mEditor = editor;
     }
 
     public Set<String> getMissingClasses() {
@@ -161,7 +169,14 @@ public final class ProjectCallback extends LegacyCallback {
 
         try {
             if (mLoader == null) {
-                mLoader = new ProjectClassLoader(mParentClassLoader, mProject);
+                // Allow creating class loaders during rendering; may be prevented by the
+                // RenderSecurityManager
+                boolean token = RenderSecurityManager.enterSafeRegion(mCredential);
+                try {
+                  mLoader = new ProjectClassLoader(mParentClassLoader, mProject);
+                } finally {
+                    RenderSecurityManager.exitSafeRegion(token);
+                }
             }
             clazz = mLoader.loadClass(className);
         } catch (Exception e) {
@@ -187,7 +202,7 @@ public final class ProjectCallback extends LegacyCallback {
                 e = e.getCause();
             }
 
-            AdtPlugin.log(e, "%1$s failed to instantiate.", className); //$NON-NLS-1$
+            appendToIdeLog(e, "%1$s failed to instantiate.", className); //$NON-NLS-1$
 
             // Add the missing class to the list so that the renderer can print them later.
             if (mLogger instanceof RenderLogger) {
@@ -278,10 +293,15 @@ public final class ProjectCallback extends LegacyCallback {
     @Override
     public String getNamespace() {
         if (mNamespace == null) {
-            ManifestData manifestData = AndroidManifestHelper.parseForData(mProject);
-            if (manifestData != null) {
-                String javaPackage = manifestData.getPackage();
-                mNamespace = String.format(AdtConstants.NS_CUSTOM_RESOURCES, javaPackage);
+            boolean token = RenderSecurityManager.enterSafeRegion(mCredential);
+            try {
+                ManifestData manifestData = AndroidManifestHelper.parseForData(mProject);
+                if (manifestData != null) {
+                    String javaPackage = manifestData.getPackage();
+                    mNamespace = String.format(AdtConstants.NS_CUSTOM_RESOURCES, javaPackage);
+                }
+            } finally {
+                RenderSecurityManager.exitSafeRegion(token);
             }
         }
 
@@ -429,23 +449,33 @@ public final class ProjectCallback extends LegacyCallback {
 
     @Override
     public ILayoutPullParser getParser(String layoutName) {
-        // Try to compute the ResourceValue for this layout since layoutlib
-        // must be an older version which doesn't pass the value:
-        if (mResourceResolver != null) {
-            ResourceValue value = mResourceResolver.getProjectResource(ResourceType.LAYOUT,
-                    layoutName);
-            if (value != null) {
-                return getParser(value);
+        boolean token = RenderSecurityManager.enterSafeRegion(mCredential);
+        try {
+            // Try to compute the ResourceValue for this layout since layoutlib
+            // must be an older version which doesn't pass the value:
+            if (mResourceResolver != null) {
+                ResourceValue value = mResourceResolver.getProjectResource(ResourceType.LAYOUT,
+                        layoutName);
+                if (value != null) {
+                    return getParser(value);
+                }
             }
-        }
 
-        return getParser(layoutName, null);
+            return getParser(layoutName, null);
+        } finally {
+            RenderSecurityManager.exitSafeRegion(token);
+        }
     }
 
     @Override
     public ILayoutPullParser getParser(ResourceValue layoutResource) {
-        return getParser(layoutResource.getName(),
-                new File(layoutResource.getValue()));
+        boolean token = RenderSecurityManager.enterSafeRegion(mCredential);
+        try {
+            return getParser(layoutResource.getName(),
+                    new File(layoutResource.getValue()));
+        } finally {
+            RenderSecurityManager.exitSafeRegion(token);
+        }
     }
 
     private ILayoutPullParser getParser(String layoutName, File xml) {
@@ -469,11 +499,11 @@ public final class ProjectCallback extends LegacyCallback {
                 parser.setInput(new StringReader(xmlText));
                 return parser;
             } catch (XmlPullParserException e) {
-                AdtPlugin.log(e, null);
+                appendToIdeLog(e, null);
             } catch (FileNotFoundException e) {
                 // Shouldn't happen since we check isFile() above
             } catch (IOException e) {
-                AdtPlugin.log(e, null);
+                appendToIdeLog(e, null);
             }
         }
 
@@ -637,5 +667,21 @@ public final class ProjectCallback extends LegacyCallback {
      */
     public void setResourceResolver(ResourceResolver resolver) {
         mResourceResolver = resolver;
+    }
+
+    // Append the given message to the ADT log. Bypass the sandbox if necessary
+    // such that we can write to the log file.
+    private void appendToIdeLog(Throwable exception, String format, Object ... args) {
+        boolean token = RenderSecurityManager.enterSafeRegion(mCredential);
+        try {
+            AdtPlugin.log(exception, format, args);
+        } finally {
+            RenderSecurityManager.exitSafeRegion(token);
+        }
+    }
+
+    @Override
+    public ActionBarCallback getActionBarCallback() {
+        return new ActionBarHandler(mEditor);
     }
 }

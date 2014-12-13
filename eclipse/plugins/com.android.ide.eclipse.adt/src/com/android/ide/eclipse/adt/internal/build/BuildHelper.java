@@ -40,9 +40,10 @@ import com.android.sdklib.build.RenderScriptProcessor;
 import com.android.sdklib.build.SealedApkException;
 import com.android.sdklib.internal.build.DebugKeyProvider;
 import com.android.sdklib.internal.build.DebugKeyProvider.KeytoolException;
-import com.android.sdklib.util.GrabProcessOutput;
-import com.android.sdklib.util.GrabProcessOutput.IProcessOutput;
-import com.android.sdklib.util.GrabProcessOutput.Wait;
+import com.android.utils.GrabProcessOutput;
+import com.android.utils.GrabProcessOutput.IProcessOutput;
+import com.android.utils.GrabProcessOutput.Wait;
+import com.google.common.base.Charsets;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -581,9 +582,9 @@ public class BuildHelper {
         String[] envp = null;
         Map<String, String> envMap = new TreeMap<String, String>(System.getenv());
         if (!envMap.containsKey("PROGUARD_HOME")) {                                    //$NON-NLS-1$
-            envMap.put("PROGUARD_HOME",    Sdk.getCurrent().getSdkLocation() +         //$NON-NLS-1$
-                                            SdkConstants.FD_TOOLS + File.separator +
-                                            SdkConstants.FD_PROGUARD);
+            envMap.put("PROGUARD_HOME", Sdk.getCurrent().getSdkOsLocation() +          //$NON-NLS-1$
+                                        SdkConstants.FD_TOOLS + File.separator +
+                                        SdkConstants.FD_PROGUARD);
             envp = new String[envMap.size()];
             int i = 0;
             for (Map.Entry<String, String> entry : envMap.entrySet()) {
@@ -848,7 +849,7 @@ public class BuildHelper {
 
         // add a hash of the original file path
         HashFunction hashFunction = Hashing.md5();
-        HashCode hashCode = hashFunction.hashString(inputFile.getAbsolutePath());
+        HashCode hashCode = hashFunction.hashString(inputFile.getAbsolutePath(), Charsets.UTF_8);
 
         return name + "-" + hashCode.toString() + ".jar";
     }
@@ -913,6 +914,10 @@ public class BuildHelper {
                 commandArray.add("-c"); //$NON-NLS-1$
                 commandArray.add(configFilter);
             }
+
+            // never compress apks.
+            commandArray.add("-0");
+            commandArray.add("apk");
 
             commandArray.add("-M"); //$NON-NLS-1$
             commandArray.add(osManifestPath);

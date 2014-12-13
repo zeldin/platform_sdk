@@ -20,7 +20,8 @@
 #include "ColorBuffer.h"
 #include "RenderContext.h"
 #include "WindowSurface.h"
-#include <utils/threads.h>
+#include "emugl/common/mutex.h"
+
 #include <map>
 #include <EGL/egl.h>
 #include <stdint.h>
@@ -72,7 +73,7 @@ public:
     HandleType createColorBuffer(int p_width, int p_height, GLenum p_internalFormat);
     void DestroyRenderContext(HandleType p_context);
     void DestroyWindowSurface(HandleType p_surface);
-    void openColorBuffer(HandleType p_colorbuffer);
+    int openColorBuffer(HandleType p_colorbuffer);
     void closeColorBuffer(HandleType p_colorbuffer);
 
     bool  bindContext(HandleType p_context, HandleType p_drawSurface, HandleType p_readSurface);
@@ -111,7 +112,7 @@ private:
     int m_y;
     int m_width;
     int m_height;
-    android::Mutex m_lock;
+    emugl::Mutex m_lock;
     FBNativeWindowType m_nativeWindow;
     FrameBufferCaps m_caps;
     EGLDisplay m_eglDisplay;

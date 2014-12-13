@@ -27,6 +27,7 @@
 typedef std::set<RenderThread *> RenderThreadsSet;
 
 RenderServer::RenderServer() :
+    m_lock(),
     m_listenSock(NULL),
     m_exiting(false)
 {
@@ -76,7 +77,7 @@ RenderServer *RenderServer::create(char* addr, size_t addrLen)
     return server;
 }
 
-int RenderServer::Main()
+intptr_t RenderServer::main()
 {
     RenderThreadsSet threads;
 
@@ -102,7 +103,7 @@ int RenderServer::Main()
             break;
         }
 
-        RenderThread *rt = RenderThread::create(stream);
+        RenderThread *rt = RenderThread::create(stream, &m_lock);
         if (!rt) {
             fprintf(stderr,"Failed to create RenderThread\n");
             delete stream;
@@ -145,8 +146,7 @@ int RenderServer::Main()
     for (RenderThreadsSet::iterator t = threads.begin();
          t != threads.end();
          t++) {
-        int exitStatus;
-        (*t)->wait(&exitStatus);
+        (*t)->wait(NULL);
         delete (*t);
     }
     threads.clear();

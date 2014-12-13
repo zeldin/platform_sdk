@@ -24,7 +24,7 @@ import com.android.tools.lint.checks.DetectMissingPrefix;
 import com.android.tools.lint.checks.DosLineEndingDetector;
 import com.android.tools.lint.checks.HardcodedValuesDetector;
 import com.android.tools.lint.checks.InefficientWeightDetector;
-import com.android.tools.lint.checks.ManifestOrderDetector;
+import com.android.tools.lint.checks.ManifestDetector;
 import com.android.tools.lint.checks.MissingIdDetector;
 import com.android.tools.lint.checks.ObsoleteLayoutParamsDetector;
 import com.android.tools.lint.checks.PxUsageDetector;
@@ -37,7 +37,7 @@ import com.android.tools.lint.checks.TypographyDetector;
 import com.android.tools.lint.checks.UseCompoundDrawableDetector;
 import com.android.tools.lint.checks.UselessViewDetector;
 import com.android.tools.lint.detector.api.Issue;
-import com.android.tools.lint.detector.api.Issue.OutputFormat;
+import com.android.tools.lint.detector.api.TextFormat;
 
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.runtime.CoreException;
@@ -110,7 +110,7 @@ abstract class LintFix implements ICompletionProposal {
     public String getAdditionalProposalInfo() {
         Issue issue = EclipseLintClient.getRegistry().getIssue(mId);
         if (issue != null) {
-            return issue.getExplanation(OutputFormat.HTML);
+            return issue.getExplanation(TextFormat.HTML);
         }
 
         return null;
@@ -152,7 +152,7 @@ abstract class LintFix implements ICompletionProposal {
                 LinearLayoutWeightFix.class);
         sFixes.put(AccessibilityDetector.ISSUE.getId(), SetAttributeFix.class);
         sFixes.put(InefficientWeightDetector.BASELINE_WEIGHTS.getId(), SetAttributeFix.class);
-        sFixes.put(ManifestOrderDetector.ALLOW_BACKUP.getId(), SetAttributeFix.class);
+        sFixes.put(ManifestDetector.ALLOW_BACKUP.getId(), SetAttributeFix.class);
         sFixes.put(MissingIdDetector.ISSUE.getId(), SetAttributeFix.class);
         sFixes.put(HardcodedValuesDetector.ISSUE.getId(), ExtractStringFix.class);
         sFixes.put(UselessViewDetector.USELESS_LEAF.getId(), RemoveUselessViewFix.class);

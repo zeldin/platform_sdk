@@ -23,6 +23,7 @@ import com.android.ide.common.api.INode;
 import com.android.ide.common.api.Rect;
 import com.android.ide.common.rendering.HardwareConfigHelper;
 import com.android.ide.common.rendering.LayoutLibrary;
+import com.android.ide.common.rendering.RenderSecurityManager;
 import com.android.ide.common.rendering.api.Capability;
 import com.android.ide.common.rendering.api.DrawableParams;
 import com.android.ide.common.rendering.api.HardwareConfig;
@@ -38,6 +39,7 @@ import com.android.ide.common.rendering.api.ViewInfo;
 import com.android.ide.common.resources.ResourceResolver;
 import com.android.ide.common.resources.configuration.FolderConfiguration;
 import com.android.ide.eclipse.adt.AdtPlugin;
+import com.android.ide.eclipse.adt.AdtUtils;
 import com.android.ide.eclipse.adt.internal.editors.layout.ContextPullParser;
 import com.android.ide.eclipse.adt.internal.editors.layout.ProjectCallback;
 import com.android.ide.eclipse.adt.internal.editors.layout.UiElementPullParser;
@@ -49,6 +51,7 @@ import com.android.ide.eclipse.adt.internal.editors.layout.gre.NodeFactory;
 import com.android.ide.eclipse.adt.internal.editors.layout.gre.NodeProxy;
 import com.android.ide.eclipse.adt.internal.editors.layout.uimodel.UiViewElementNode;
 import com.android.ide.eclipse.adt.internal.editors.manifest.ManifestInfo;
+import com.android.ide.eclipse.adt.internal.editors.manifest.ManifestInfo.ActivityAttributes;
 import com.android.ide.eclipse.adt.internal.editors.uimodel.UiDocumentNode;
 import com.android.ide.eclipse.adt.internal.editors.uimodel.UiElementNode;
 import com.android.ide.eclipse.adt.internal.sdk.AndroidTargetData;
@@ -62,6 +65,7 @@ import org.eclipse.core.resources.IProject;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
+import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -77,6 +81,8 @@ import java.util.Set;
  * Android layouts. This is a wrapper around the layout library.
  */
 public class RenderService {
+    private static final Object RENDERING_LOCK = new Object();
+
     /** Reference to the file being edited. Can also be used to access the {@link IProject}. */
     private final GraphicalEditorPart mEditor;
 
@@ -103,10 +109,12 @@ public class RenderService {
     private Integer mOverrideBgColor;
     private boolean mShowDecorations = true;
     private Set<UiElementNode> mExpandNodes = Collections.<UiElementNode>emptySet();
+    private final Object mCredential;
 
     /** Use the {@link #create} factory instead */
-    private RenderService(GraphicalEditorPart editor) {
+    private RenderService(GraphicalEditorPart editor, Object credential) {
         mEditor = editor;
+        mCredential = credential;
 
         mProject = editor.getProject();
         LayoutCanvas canvas = editor.getCanvasControl();
@@ -130,8 +138,10 @@ public class RenderService {
     }
 
     private RenderService(GraphicalEditorPart editor,
-            Configuration configuration, ResourceResolver resourceResolver) {
+            Configuration configuration, ResourceResolver resourceResolver,
+            Object credential) {
         mEditor = editor;
+        mCredential = credential;
 
         mProject = editor.getProject();
         LayoutCanvas canvas = editor.getCanvasControl();
@@ -151,6 +161,23 @@ public class RenderService {
         mTargetSdkVersion = editor.getTargetSdkVersion();
         mLocale = configuration.getLocale();
     }
+
+    private RenderSecurityManager createSecurityManager() {
+        String projectPath = null;
+        String sdkPath = null;
+        if (RenderSecurityManager.RESTRICT_READS) {
+            projectPath = AdtUtils.getAbsolutePath(mProject).toFile().getPath();
+            Sdk sdk = Sdk.getCurrent();
+            sdkPath = sdk != null ? sdk.getSdkOsLocation() : null;
+        }
+        RenderSecurityManager securityManager = new RenderSecurityManager(sdkPath, projectPath);
+        securityManager.setLogger(AdtPlugin.getDefault());
+
+        // Make sure this is initialized before we attempt to use it from layoutlib
+        Toolkit.getDefaultToolkit();
+
+        return securityManager;
+      }
 
     /**
      * Returns true if this configuration supports the given rendering
@@ -184,9 +211,20 @@ public class RenderService {
      * @return a {@link RenderService} which can perform rendering services
      */
     public static RenderService create(GraphicalEditorPart editor) {
-        RenderService renderService = new RenderService(editor);
+        // Delegate to editor such that it can pass its credential to the service
+        return editor.createRenderService();
+    }
 
-        return renderService;
+    /**
+     * Creates a new {@link RenderService} associated with the given editor.
+     *
+     * @param editor the editor to provide configuration data such as the render target
+     * @param credential the sandbox credential
+     * @return a {@link RenderService} which can perform rendering services
+     */
+    @NonNull
+    public static RenderService create(GraphicalEditorPart editor, Object credential) {
+        return new RenderService(editor, credential);
     }
 
     /**
@@ -199,9 +237,22 @@ public class RenderService {
      */
     public static RenderService create(GraphicalEditorPart editor,
             Configuration configuration, ResourceResolver resolver) {
-        RenderService renderService = new RenderService(editor, configuration, resolver);
+        // Delegate to editor such that it can pass its credential to the service
+        return editor.createRenderService(configuration, resolver);
+    }
 
-        return renderService;
+    /**
+     * Creates a new {@link RenderService} associated with the given editor.
+     *
+     * @param editor the editor to provide configuration data such as the render target
+     * @param configuration the configuration to use (and fallback to editor for the rest)
+     * @param resolver a resource resolver to use to look up resources
+     * @param credential the sandbox credential
+     * @return a {@link RenderService} which can perform rendering services
+     */
+    public static RenderService create(GraphicalEditorPart editor,
+            Configuration configuration, ResourceResolver resolver, Object credential) {
+        return new RenderService(editor, configuration, resolver, credential);
     }
 
     /**
@@ -433,6 +484,18 @@ public class RenderService {
             try {
                 params.setAppLabel(manifestInfo.getApplicationLabel());
                 params.setAppIcon(manifestInfo.getApplicationIcon());
+                String activity = mEditor.getConfigurationChooser().getConfiguration().getActivity();
+                if (activity != null) {
+                    ActivityAttributes info = manifestInfo.getActivityAttributes(activity);
+                    if (info != null) {
+                        if (info.getLabel() != null) {
+                            params.setAppLabel(info.getLabel());
+                        }
+                        if (info.getIcon() != null) {
+                            params.setAppIcon(info.getIcon());
+                        }
+                    }
+                }
             } catch (Exception e) {
                 // ignore.
             }
@@ -445,15 +508,20 @@ public class RenderService {
         // set the Image Overlay as the image factory.
         params.setImageFactory(mImageFactory);
 
+        mProjectCallback.setLogger(mLogger);
+        mProjectCallback.setResourceResolver(mResourceResolver);
+        RenderSecurityManager securityManager = createSecurityManager();
         try {
-            mProjectCallback.setLogger(mLogger);
-            mProjectCallback.setResourceResolver(mResourceResolver);
-            return mLayoutLib.createSession(params);
+            securityManager.setActive(true, mCredential);
+            synchronized (RENDERING_LOCK) {
+                return mLayoutLib.createSession(params);
+            }
         } catch (RuntimeException t) {
             // Exceptions from the bridge
             mLogger.error(null, t.getLocalizedMessage(), t, null);
             throw t;
         } finally {
+            securityManager.dispose(mCredential);
             mProjectCallback.setLogger(null);
             mProjectCallback.setResourceResolver(null);
         }
@@ -553,10 +621,14 @@ public class RenderService {
         params.setForceNoDecor();
 
         RenderSession session = null;
+        mProjectCallback.setLogger(mLogger);
+        mProjectCallback.setResourceResolver(mResourceResolver);
+        RenderSecurityManager securityManager = createSecurityManager();
         try {
-            mProjectCallback.setLogger(mLogger);
-            mProjectCallback.setResourceResolver(mResourceResolver);
-            session = mLayoutLib.createSession(params);
+            securityManager.setActive(true, mCredential);
+            synchronized (RENDERING_LOCK) {
+                session = mLayoutLib.createSession(params);
+            }
             if (session.getResult().isSuccess()) {
                 assert session.getRootViews().size() == 1;
                 ViewInfo root = session.getRootViews().get(0);
@@ -579,6 +651,7 @@ public class RenderService {
             mLogger.error(null, t.getLocalizedMessage(), t, null);
             throw t;
         } finally {
+            securityManager.dispose(mCredential);
             mProjectCallback.setLogger(null);
             mProjectCallback.setResourceResolver(null);
             if (session != null) {

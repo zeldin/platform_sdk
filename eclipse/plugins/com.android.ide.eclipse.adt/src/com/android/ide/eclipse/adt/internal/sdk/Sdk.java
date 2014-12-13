@@ -282,7 +282,7 @@ public final class Sdk  {
                     // create the AVD Manager
                     AvdManager avdManager = null;
                     try {
-                        avdManager = AvdManager.getInstance(manager, log);
+                        avdManager = AvdManager.getInstance(manager.getLocalSdk(), log);
                     } catch (AndroidLocationException e) {
                         log.error(e, "Error parsing the AVDs");
                     }
@@ -321,15 +321,47 @@ public final class Sdk  {
     }
 
     /**
-     * Returns the location (OS path) of the current SDK.
+     * Returns the location of the current SDK as an OS path string.
+     * Guaranteed to be terminated by a platform-specific path separator.
+     * <p/>
+     * Due to {@link File} canonicalization, this MAY differ from the string used to initialize
+     * the SDK path.
+     *
+     * @return The SDK OS path or null if no SDK is setup.
+     * @deprecated Consider using {@link #getSdkFileLocation()} instead.
+     * @see #getSdkFileLocation()
      */
-    public String getSdkLocation() {
-        return mManager.getLocation();
+    @Deprecated
+    @Nullable
+    public String getSdkOsLocation() {
+        String path = mManager == null ? null : mManager.getLocation();
+        if (path != null) {
+            // For backward compatibility make sure it ends with a separator.
+            // This used to be the case when the SDK Manager was created from a String path
+            // but now that a File is internally used the trailing dir separator is lost.
+            if (path.length() > 0 && !path.endsWith(File.separator)) {
+                path = path + File.separator;
+            }
+        }
+        return path;
+    }
+
+    /**
+     * Returns the location of the current SDK as a {@link File} or null.
+     *
+     * @return The SDK OS path or null if no SDK is setup.
+     */
+    @Nullable
+    public File getSdkFileLocation() {
+        if (mManager == null || mManager.getLocalSdk() == null) {
+            return null;
+        }
+        return mManager.getLocalSdk().getLocation();
     }
 
     /**
      * Returns a <em>new</em> {@link SdkManager} that can parse the SDK located
-     * at the current {@link #getSdkLocation()}.
+     * at the current {@link #getSdkOsLocation()}.
      * <p/>
      * Implementation detail: The {@link Sdk} has its own internal manager with
      * a custom logger which is not designed to be useful for outsiders. Callers
@@ -343,7 +375,7 @@ public final class Sdk  {
      * @return A new {@link SdkManager} parsing the same location.
      */
     public @Nullable SdkManager getNewSdkManager(@NonNull ILogger log) {
-        return SdkManager.createManager(getSdkLocation(), log);
+        return SdkManager.createManager(getSdkOsLocation(), log);
     }
 
     /**
@@ -712,11 +744,11 @@ public final class Sdk  {
                         }
 
                         AdtPlugin.log(t, "Exception in checkAndLoadTargetData.");    //$NON-NLS-1$
-                        return new Status(IStatus.ERROR, AdtPlugin.PLUGIN_ID,
-                                String.format(
-                                        "Parsing Data for %1$s failed", //$NON-NLS-1$
-                                        target.hashString()),
-                                t);
+                        String message = String.format("Parsing Data for %1$s failed",  target.hashString());
+                        if (t instanceof UnsupportedClassVersionError) {
+                            message = "To use this platform, run Eclipse with JDK 7 or later. (" + message + ")";
+                        }
+                        return new Status(IStatus.ERROR, AdtPlugin.PLUGIN_ID, message, t);
                     }
                 }
             };
@@ -901,7 +933,7 @@ public final class Sdk  {
         mDocBaseUrl = getDocumentationBaseUrl(manager.getLocation() +
                 SdkConstants.OS_SDK_DOCS_FOLDER);
 
-        mDeviceManager = DeviceManager.createInstance(manager.getLocation(),
+        mDeviceManager = DeviceManager.createInstance(manager.getLocalSdk().getLocation(),
                                                       AdtPlugin.getDefault());
 
         // update whatever ProjectState is already present with new IAndroidTarget objects.

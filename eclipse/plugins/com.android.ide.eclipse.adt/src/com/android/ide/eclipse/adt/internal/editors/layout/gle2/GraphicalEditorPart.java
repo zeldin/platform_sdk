@@ -27,9 +27,11 @@ import static com.android.SdkConstants.FD_GEN_SOURCES;
 import static com.android.SdkConstants.GRID_LAYOUT;
 import static com.android.SdkConstants.SCROLL_VIEW;
 import static com.android.SdkConstants.STRING_PREFIX;
+import static com.android.SdkConstants.VALUE_FALSE;
 import static com.android.SdkConstants.VALUE_FILL_PARENT;
 import static com.android.SdkConstants.VALUE_MATCH_PARENT;
 import static com.android.SdkConstants.VALUE_WRAP_CONTENT;
+import static com.android.ide.common.rendering.RenderSecurityManager.ENABLED_PROPERTY;
 import static com.android.ide.eclipse.adt.internal.editors.layout.configuration.Configuration.CFG_DEVICE;
 import static com.android.ide.eclipse.adt.internal.editors.layout.configuration.Configuration.CFG_DEVICE_STATE;
 import static com.android.ide.eclipse.adt.internal.editors.layout.configuration.Configuration.CFG_FOLDER;
@@ -45,6 +47,8 @@ import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
 import com.android.ide.common.layout.BaseLayoutRule;
 import com.android.ide.common.rendering.LayoutLibrary;
+import com.android.ide.common.rendering.RenderSecurityException;
+import com.android.ide.common.rendering.RenderSecurityManager;
 import com.android.ide.common.rendering.StaticRenderSession;
 import com.android.ide.common.rendering.api.Capability;
 import com.android.ide.common.rendering.api.LayoutLog;
@@ -174,6 +178,8 @@ import org.eclipse.wb.internal.core.editor.structure.PageSiteComposite;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -284,6 +290,7 @@ public class GraphicalEditorPart extends EditorPart
     private FlyoutControlComposite mPaletteComposite;
     private PropertyFactory mPropertyFactory;
     private boolean mRenderedOnce;
+    private final Object mCredential = new Object();
 
     /**
      * Flags which tracks whether this editor is currently active which is set whenever
@@ -1523,11 +1530,43 @@ public class GraphicalEditorPart extends EditorPart
         return true;
     }
 
+    /**
+     * Creates a {@link RenderService} associated with this editor
+     * @return the render service
+     */
+    @NonNull
+    public RenderService createRenderService() {
+        return RenderService.create(this, mCredential);
+    }
+
+    /**
+     * Creates a {@link RenderLogger} associated with this editor
+     * @param name the name of the logger
+     * @return the new logger
+     */
+    @NonNull
+    public RenderLogger createRenderLogger(String name) {
+        return new RenderLogger(name, mCredential);
+    }
+
+    /**
+     * Creates a {@link RenderService} associated with this editor
+     *
+     * @param configuration the configuration to use (and fallback to editor for the rest)
+     * @param resolver a resource resolver to use to look up resources
+     * @return the render service
+     */
+    @NonNull
+    public RenderService createRenderService(Configuration configuration,
+            ResourceResolver resolver) {
+        return RenderService.create(this, configuration, resolver, mCredential);
+    }
+
     private void renderWithBridge(IProject iProject, UiDocumentNode model,
             LayoutLibrary layoutLib) {
         LayoutCanvas canvas = getCanvasControl();
         Set<UiElementNode> explodeNodes = canvas.getNodesToExplode();
-        RenderLogger logger = new RenderLogger(mEditedFile.getName());
+        RenderLogger logger = createRenderLogger(mEditedFile.getName());
         RenderingMode renderingMode = RenderingMode.NORMAL;
         // FIXME set the rendering mode using ViewRule or something.
         List<UiElementNode> children = model.getUiChildren();
@@ -1536,7 +1575,7 @@ public class GraphicalEditorPart extends EditorPart
             renderingMode = RenderingMode.V_SCROLL;
         }
 
-        RenderSession session = RenderService.create(this)
+        RenderSession session = RenderService.create(this, mCredential)
             .setModel(model)
             .setLog(logger)
             .setRenderingMode(renderingMode)
@@ -1649,7 +1688,8 @@ public class GraphicalEditorPart extends EditorPart
             ResourceManager resManager = ResourceManager.getInstance();
             IProject project = getProject();
             ProjectResources projectRes = resManager.getProjectResources(project);
-            mProjectCallback = new ProjectCallback(layoutLibrary, projectRes, project);
+            mProjectCallback = new ProjectCallback(layoutLibrary, projectRes, project,
+                    mCredential, this);
         } else if (reset) {
             // Also clears the set of missing/broken classes prior to rendering
             mProjectCallback.getMissingClasses().clear();
@@ -1813,6 +1853,50 @@ public class GraphicalEditorPart extends EditorPart
         }
 
         Throwable throwable = throwables.get(0);
+
+        if (throwable instanceof RenderSecurityException) {
+            addActionLink(mErrorLabel, ActionLinkStyleRange.LINK_DISABLE_SANDBOX,
+                    "\nTurn off custom view rendering sandbox\n");
+
+            StringBuilder builder = new StringBuilder(200);
+            String lastFailedPath = RenderSecurityManager.getLastFailedPath();
+            if (lastFailedPath != null) {
+                builder.append("Diagnostic info for ADT bug report:\n");
+                builder.append("Failed path: ").append(lastFailedPath).append('\n');
+                String tempDir = System.getProperty("java.io.tmpdir");
+                builder.append("Normal temp dir: ").append(tempDir).append('\n');
+                File normalized = new File(tempDir);
+                builder.append("Normalized temp dir: ").append(normalized.getPath()).append('\n');
+                try {
+                    builder.append("Canonical temp dir: ").append(normalized.getCanonicalPath())
+                    .append('\n');
+                } catch (IOException e) {
+                    // ignore
+                }
+                builder.append("os.name: ").append(System.getProperty("os.name")).append('\n');
+                builder.append("os.version: ").append(System.getProperty("os.version"));
+                builder.append('\n');
+                builder.append("java.runtime.version: ");
+                builder.append(System.getProperty("java.runtime.version"));
+            }
+            if (throwable.getMessage().equals("Unable to create temporary file")) {
+                String javaVersion = System.getProperty("java.version");
+                if (javaVersion.startsWith("1.7.0_")) {
+                    int version = Integer
+                            .parseInt(javaVersion.substring(javaVersion.indexOf('_') + 1));
+                    if (version > 0 && version < 45) {
+                        builder.append('\n');
+                        builder.append("Tip: This may be caused by using an older version " +
+                                "of JDK 1.7.0; try using at least 1.7.0_45 (you are using " +
+                                javaVersion + ")");
+                    }
+                }
+            }
+            if (builder.length() > 0) {
+                addText(mErrorLabel, builder.toString());
+            }
+        }
+
         StackTraceElement[] frames = throwable.getStackTrace();
         int end = -1;
         boolean haveInterestingFrame = false;
@@ -2002,8 +2086,10 @@ public class GraphicalEditorPart extends EditorPart
         IAndroidTarget target = currentSdk.getTarget(project);
         if (target != null) {
             AndroidTargetData targetData = currentSdk.getTargetData(target);
-            LayoutDescriptors layoutDescriptors = targetData.getLayoutDescriptors();
-            return layoutDescriptors.getAllViewClassNames();
+            if (targetData != null) {
+                LayoutDescriptors layoutDescriptors = targetData.getLayoutDescriptors();
+                return layoutDescriptors.getAllViewClassNames();
+            }
         }
 
         return Collections.emptyList();
@@ -2341,6 +2427,8 @@ public class GraphicalEditorPart extends EditorPart
         private static final int SET_ATTRIBUTE = 8;
         /** Open the given file and line number */
         private static final int LINK_OPEN_LINE = 9;
+        /** Disable sandbox */
+        private static final int LINK_DISABLE_SANDBOX = 10;
 
         /** Client data: the contents depend on the specific action */
         private final Object[] mData;
@@ -2465,6 +2553,19 @@ public class GraphicalEditorPart extends EditorPart
                             element.commitDirtyAttributesToXml();
                         }
                     });
+                    break;
+                }
+                case LINK_DISABLE_SANDBOX: {
+                    RenderSecurityManager.sEnabled = false;
+                    recomputeLayout();
+
+                    MessageDialog.openInformation(AdtPlugin.getShell(),
+                        "Disabled Rendering Sandbox",
+                        "The custom view rendering sandbox was disabled for this session.\n\n" +
+                        "You can turn it off permanently by adding\n" +
+                        "-D" + ENABLED_PROPERTY + "=" + VALUE_FALSE + "\n" +
+                        "as a new line in eclipse.ini.");
+
                     break;
                 }
                 default:

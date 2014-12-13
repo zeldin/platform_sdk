@@ -16,6 +16,8 @@
 package com.android.ide.eclipse.adt.internal.launch.junit;
 
 import com.android.SdkConstants;
+import com.android.annotations.NonNull;
+import com.android.annotations.Nullable;
 import com.android.ide.common.xml.ManifestData;
 import com.android.ide.common.xml.ManifestData.Instrumentation;
 import com.android.ide.common.xml.ManifestData.UsesLibrary;
@@ -71,6 +73,12 @@ class InstrumentationRunnerValidator {
     }
 
     private void init(ManifestData manifestData) {
+        if (manifestData == null) {
+            mInstrumentationNames = new String[0];
+            mHasRunnerLibrary = false;
+            return;
+        }
+
         Instrumentation[] instrumentations = manifestData.getInstrumentations();
         mInstrumentationNames = new String[instrumentations.length];
         for (int i = 0; i < instrumentations.length; i++) {
@@ -98,9 +106,9 @@ class InstrumentationRunnerValidator {
     /**
      * Return the set of instrumentation names for the Android project.
      *
-     * @return <code>null</code> if error occurred parsing instrumentations, otherwise returns array
-     * of instrumentation class names
+     * @return array of instrumentation class names, possibly empty
      */
+    @NonNull
     String[] getInstrumentationNames() {
         return mInstrumentationNames;
     }
@@ -111,6 +119,7 @@ class InstrumentationRunnerValidator {
      * @return fully qualified instrumentation class name. <code>null</code> if no valid
      * instrumentation can be found.
      */
+    @Nullable
     String getValidInstrumentationTestRunner() {
         for (String instrumentation : getInstrumentationNames()) {
             if (validateInstrumentationRunner(instrumentation) == INSTRUMENTATION_OK) {
@@ -134,13 +143,15 @@ class InstrumentationRunnerValidator {
         }
         // check if this instrumentation is the standard test runner
         if (!instrumentation.equals(SdkConstants.CLASS_INSTRUMENTATION_RUNNER)) {
-            // check if it extends the standard test runner
+            // Ideally, we'd check if the class extends instrumentation test runner.
+            // However, the Google Instrumentation Test Runner extends Google Instrumentation, and not a test runner,
+            // so we just check that the super class is Instrumentation.
             String result = BaseProjectHelper.testClassForManifest(mJavaProject,
-                    instrumentation, SdkConstants.CLASS_INSTRUMENTATION_RUNNER, true);
+                    instrumentation, SdkConstants.CLASS_INSTRUMENTATION, true);
              if (result != BaseProjectHelper.TEST_CLASS_OK) {
                 return String.format(
                         LaunchMessages.InstrValidator_WrongRunnerTypeMsg_s,
-                        SdkConstants.CLASS_INSTRUMENTATION_RUNNER);
+                        SdkConstants.CLASS_INSTRUMENTATION);
              }
         }
         return INSTRUMENTATION_OK;

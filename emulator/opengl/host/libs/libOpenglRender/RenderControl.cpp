@@ -215,13 +215,20 @@ static uint32_t rcCreateColorBuffer(uint32_t width,
     return fb->createColorBuffer(width, height, internalFormat);
 }
 
-static void rcOpenColorBuffer(uint32_t colorbuffer)
+static int rcOpenColorBuffer2(uint32_t colorbuffer)
 {
     FrameBuffer *fb = FrameBuffer::getFB();
     if (!fb) {
-        return;
+        return -1;
     }
-    fb->openColorBuffer( colorbuffer );
+    return fb->openColorBuffer( colorbuffer );
+}
+
+// Deprecated, kept for compatibility with old system images only.
+// Use rcOpenColorBuffer2 instead.
+static void rcOpenColorBuffer(uint32_t colorbuffer)
+{
+    (void) rcOpenColorBuffer2(colorbuffer);
 }
 
 static void rcCloseColorBuffer(uint32_t colorbuffer)
@@ -239,7 +246,9 @@ static int rcFlushWindowColorBuffer(uint32_t windowSurface)
     if (!fb) {
         return -1;
     }
-    fb->flushWindowSurfaceColorBuffer(windowSurface);
+    if (!fb->flushWindowSurfaceColorBuffer(windowSurface)) {
+        return -1;
+    }
     return 0;
 }
 
@@ -332,29 +341,30 @@ static int rcUpdateColorBuffer(uint32_t colorBuffer,
 
 void initRenderControlContext(renderControl_decoder_context_t *dec)
 {
-    dec->set_rcGetRendererVersion(rcGetRendererVersion);
-    dec->set_rcGetEGLVersion(rcGetEGLVersion);
-    dec->set_rcQueryEGLString(rcQueryEGLString);
-    dec->set_rcGetGLString(rcGetGLString);
-    dec->set_rcGetNumConfigs(rcGetNumConfigs);
-    dec->set_rcGetConfigs(rcGetConfigs);
-    dec->set_rcChooseConfig(rcChooseConfig);
-    dec->set_rcGetFBParam(rcGetFBParam);
-    dec->set_rcCreateContext(rcCreateContext);
-    dec->set_rcDestroyContext(rcDestroyContext);
-    dec->set_rcCreateWindowSurface(rcCreateWindowSurface);
-    dec->set_rcDestroyWindowSurface(rcDestroyWindowSurface);
-    dec->set_rcCreateColorBuffer(rcCreateColorBuffer);
-    dec->set_rcOpenColorBuffer(rcOpenColorBuffer);
-    dec->set_rcCloseColorBuffer(rcCloseColorBuffer);
-    dec->set_rcSetWindowColorBuffer(rcSetWindowColorBuffer);
-    dec->set_rcFlushWindowColorBuffer(rcFlushWindowColorBuffer);
-    dec->set_rcMakeCurrent(rcMakeCurrent);
-    dec->set_rcFBPost(rcFBPost);
-    dec->set_rcFBSetSwapInterval(rcFBSetSwapInterval);
-    dec->set_rcBindTexture(rcBindTexture);
-    dec->set_rcBindRenderbuffer(rcBindRenderbuffer);
-    dec->set_rcColorBufferCacheFlush(rcColorBufferCacheFlush);
-    dec->set_rcReadColorBuffer(rcReadColorBuffer);
-    dec->set_rcUpdateColorBuffer(rcUpdateColorBuffer);
+    dec->rcGetRendererVersion = rcGetRendererVersion;
+    dec->rcGetEGLVersion = rcGetEGLVersion;
+    dec->rcQueryEGLString = rcQueryEGLString;
+    dec->rcGetGLString = rcGetGLString;
+    dec->rcGetNumConfigs = rcGetNumConfigs;
+    dec->rcGetConfigs = rcGetConfigs;
+    dec->rcChooseConfig = rcChooseConfig;
+    dec->rcGetFBParam = rcGetFBParam;
+    dec->rcCreateContext = rcCreateContext;
+    dec->rcDestroyContext = rcDestroyContext;
+    dec->rcCreateWindowSurface = rcCreateWindowSurface;
+    dec->rcDestroyWindowSurface = rcDestroyWindowSurface;
+    dec->rcCreateColorBuffer = rcCreateColorBuffer;
+    dec->rcOpenColorBuffer = rcOpenColorBuffer;
+    dec->rcCloseColorBuffer = rcCloseColorBuffer;
+    dec->rcSetWindowColorBuffer = rcSetWindowColorBuffer;
+    dec->rcFlushWindowColorBuffer = rcFlushWindowColorBuffer;
+    dec->rcMakeCurrent = rcMakeCurrent;
+    dec->rcFBPost = rcFBPost;
+    dec->rcFBSetSwapInterval = rcFBSetSwapInterval;
+    dec->rcBindTexture = rcBindTexture;
+    dec->rcBindRenderbuffer = rcBindRenderbuffer;
+    dec->rcColorBufferCacheFlush = rcColorBufferCacheFlush;
+    dec->rcReadColorBuffer = rcReadColorBuffer;
+    dec->rcUpdateColorBuffer = rcUpdateColorBuffer;
+    dec->rcOpenColorBuffer2 = rcOpenColorBuffer2;
 }

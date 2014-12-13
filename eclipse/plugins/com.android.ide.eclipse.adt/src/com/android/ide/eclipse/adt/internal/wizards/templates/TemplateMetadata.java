@@ -30,11 +30,14 @@ import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHan
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.ATTR_TEXT;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.ATTR_TRIM;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.ATTR_TYPE;
+import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.ATTR_VALUE;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.CURRENT_FORMAT;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.TAG_DEPENDENCY;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.TAG_ICONS;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.TAG_PARAMETER;
 import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.TAG_THUMB;
+import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.TAG_FORMFACTOR;
+import static com.android.ide.eclipse.adt.internal.wizards.templates.TemplateHandler.TAG_CATEGORY;
 
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
@@ -46,6 +49,7 @@ import com.android.ide.eclipse.adt.internal.assetstudio.CreateAssetSetWizardStat
 import com.android.ide.eclipse.adt.internal.editors.IconFactory;
 import com.android.ide.eclipse.adt.internal.editors.layout.gle2.ImageUtils;
 import com.android.utils.Pair;
+import com.google.common.collect.Lists;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.swt.graphics.Image;
@@ -64,8 +68,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import lombok.ast.libs.org.parboiled.google.collect.Lists;
-
 /** An ADT template along with metadata */
 class TemplateMetadata {
     private final Document mDocument;
@@ -77,6 +79,8 @@ class TemplateMetadata {
     private Integer mRevision;
     private boolean mNoIcons;
     private CreateAssetSetWizardState mIconState;
+	private String mFormFactor;
+	private String mCategory;
 
     TemplateMetadata(@NonNull Document document) {
         mDocument = document;
@@ -180,6 +184,37 @@ class TemplateMetadata {
         }
 
         return mRevision.intValue();
+    }
+    
+    public String getFormFactor() {
+        if (mFormFactor == null) {
+            mFormFactor = "Mobile";
+            
+            NodeList formfactorDeclarations = mDocument.getElementsByTagName(TAG_FORMFACTOR);
+            if (formfactorDeclarations.getLength() > 0) {
+            	Element element = (Element) formfactorDeclarations.item(0);
+                String formFactor = element.getAttribute(ATTR_VALUE);
+                if (formFactor != null && !formFactor.isEmpty()) {
+                	mFormFactor = formFactor;
+                }
+            }
+        }
+        return mFormFactor;
+    }
+    
+    public String getCategory() {
+        if (mCategory == null) {
+        	mCategory = "";
+        	NodeList categories = mDocument.getElementsByTagName(TAG_CATEGORY);
+            if (categories.getLength() > 0) {
+            	Element element = (Element) categories.item(0);
+            	String category = element.getAttribute(ATTR_VALUE);
+                if (category != null && !category.isEmpty()) {
+                	mCategory = category;
+                }
+            }
+        }
+        return mCategory;
     }
 
     /**
