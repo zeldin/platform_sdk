@@ -21,7 +21,7 @@ ext {
     def eclipseBuildDeps = new File(projectDir, "../../prebuilts/eclipse-build-deps").getCanonicalFile()
     targetComponents = [
             "platform": new File(eclipseBuildDeps, "platform/org.eclipse.platform-4.2.2.zip"),
-            "cdt"     : new File(eclipseBuildDeps, "cdt/cdt-master-8.0.2.zip"),
+            "cdt"     : new File(eclipseBuildDeps, "cdt/cdt-master-8.0.0.zip"),
             "emf"     : new File(eclipseBuildDeps, "emf/emf-xsd-Update-2.9.1.zip"),
             "jdt"     : new File(eclipseBuildDeps, "jdt/org.eclipse.jdt.source-4.2.2.zip"),
             "wtp"     : new File(eclipseBuildDeps, "wtp/wtp-repo-R-3.3.2-20120210195245.zip"),
