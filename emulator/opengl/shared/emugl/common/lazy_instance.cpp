@@ -28,13 +28,17 @@ typedef LazyInstanceState::AtomicType AtomicType;
 
 #if defined(__GNUC__)
 static inline void compilerBarrier() {
+#ifdef __powerpc__
+    __asm__ __volatile__ ("sync" : : : "memory");
+#else
     __asm__ __volatile__ ("" : : : "memory");
+#endif
 }
 #else
 #error "Your compiler is not supported"
 #endif
 
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__) || defined(__powerpc__)
 #  define acquireBarrier() compilerBarrier()
 #  define releaseBarrier() compilerBarrier()
 #else
