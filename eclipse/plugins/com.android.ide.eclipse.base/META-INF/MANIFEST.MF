@@ -2,12 +2,13 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Common Android Utilities
 Bundle-SymbolicName: com.android.ide.eclipse.base;singleton:=true
-Bundle-Version: 24.0.0.qualifier
+Bundle-Version: 24.3.3.qualifier
 Require-Bundle: org.eclipse.ui,
  org.eclipse.core.runtime
 Bundle-ActivationPolicy: lazy
 Bundle-Vendor: The Android Open Source Project
 Bundle-ClassPath: .,
+ libs/annotations.jar,
  libs/common.jar,
  libs/commons-codec-1.4.jar,
  libs/commons-compress-1.0.jar,

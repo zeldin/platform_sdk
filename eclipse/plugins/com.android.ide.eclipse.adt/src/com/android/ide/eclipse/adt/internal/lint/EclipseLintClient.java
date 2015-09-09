@@ -293,6 +293,19 @@ public class EclipseLintClient extends LintClient {
                     model.releaseFromRead();
                 }
             }
+
+            @Override
+            @NonNull
+            public Location getNameLocation(@NonNull XmlContext context, @NonNull Node node) {
+                return getLocation(context, node);
+            }
+
+            @Override
+            @NonNull
+            public Location getValueLocation(@NonNull XmlContext context, @NonNull Attr node) {
+                return getLocation(context, node);
+            }
+
         };
     }
 
@@ -890,7 +903,12 @@ public class EclipseLintClient extends LintClient {
                 libraries = super.getClassPath(project).getLibraries();
             }
 
-            info = new ClassPathInfo(sources, classes, libraries);
+
+            // No test folders in Eclipse:
+            // https://bugs.eclipse.org/bugs/show_bug.cgi?id=224708
+            List<File> tests = Collections.emptyList();
+
+            info = new ClassPathInfo(sources, classes, libraries, tests);
             mProjectInfo.put(project, info);
         }
 

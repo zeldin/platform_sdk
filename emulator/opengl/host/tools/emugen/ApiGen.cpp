@@ -758,22 +758,6 @@ int ApiGen::genDecoderImpl(const std::string &filename)
     fprintf(fp, "#include \"%s_opcodes.h\"\n\n", m_basename.c_str());
     fprintf(fp, "#include \"%s_dec.h\"\n\n\n", m_basename.c_str());
 
-    fprintf(fp, "#ifdef __BIG_ENDIAN__\n");
-    fprintf(fp, "template<class T> static inline T swap64(const T& n)\n{\n  union { T a; uint64_t b; } v;\n  v.b = __builtin_bswap64(*(uint64_t *)&n);\n  return v.a;\n}\n");
-    fprintf(fp, "template<class T> static inline T swap32(const T& n)\n{\n  union { T a; uint32_t b; } v;\n  v.b = __builtin_bswap32(*(uint32_t *)&n);\n  return v.a;\n}\n");
-    fprintf(fp, "template<class T> static inline T swap16(const T& n)\n{\n  union { T a; uint16_t b; } v;\n  v.b = __builtin_bswap16(*(uint16_t *)&n);\n  return v.a;\n}\n");
-    fprintf(fp, "template<class T> static inline T swap(T n)\n{\n  if(sizeof(T)==8) return swap64(n);\n  else if(sizeof(T)==4) return swap32(n);\n  else if(sizeof(T)==2) return swap16(n);\n  else return n;\n}\n");
-    fprintf(fp, "template<class T> static inline void swap_in_place(T& n)\n{\n  n = swap(n);\n}\n");
-    fprintf(fp, "template<class T> static inline void swap_array(T* a, size_t sz)\n{\n  if(sizeof(T)>1 && sz>0) {\n    sz /= sizeof(T);\n    while(sz--) swap_in_place(*a++);\n  }\n}\n");
-    fprintf(fp, "template<class T> static inline void swap_array(const T* a, size_t sz)\n{\n  swap_array((T*)a, sz);\n}\n");
-    fprintf(fp, "static inline void swap_array(void *a, size_t sz)\n{}\n");
-    fprintf(fp, "static inline void swap_array(const void *a, size_t sz)\n{}\n");
-    fprintf(fp, "#else\n");
-    fprintf(fp, "template<class T> static inline T swap(T n)\n{\n  return n;\n}\n");
-    fprintf(fp, "template<class T> static inline void swap_in_place(T& n)\n{}\n");
-    fprintf(fp, "template<class T> static inline void swap_array(T* a, size_t sz)\n{}\n");
-    fprintf(fp, "#endif\n\n");
-
     fprintf(fp, "#include \"ProtocolUtils.h\"\n\n");
     fprintf(fp, "#include <stdio.h>\n\n");
     fprintf(fp, "typedef unsigned int tsize_t; // Target \"size_t\", which is 32-bit for now. It may or may not be the same as host's size_t when emugen is compiled.\n\n");
@@ -808,8 +792,8 @@ int ApiGen::genDecoderImpl(const std::string &filename)
 \tchar lastCall[256] = {0}; \n\
 #endif \n\
 \twhile ((len - pos >= 8) && !unknownOpcode) {   \n\
-\t\tuint32_t opcode = swap(*(uint32_t *)ptr);   \n\
-\t\tsize_t packetLen = swap(*(uint32_t *)(ptr + 4));\n\
+\t\tuint32_t opcode = *(uint32_t *)ptr;   \n\
+\t\tsize_t packetLen = *(uint32_t *)(ptr + 4);\n\
 \t\tif (len - pos < packetLen)  return pos; \n\
 \t\tswitch(opcode) {\n");
 
@@ -851,7 +835,7 @@ int ApiGen::genDecoderImpl(const std::string &filename)
             if (pass == PASS_FunctionCall &&
                 !e->retval().isVoid() &&
                 !e->retval().isPointer()) {
-                fprintf(fp, "\t\t\t*(%s *)(&tmpBuf[%s]) = swap(", retvalType.c_str(),
+                fprintf(fp, "\t\t\t*(%s *)(&tmpBuf[%s]) = ", retvalType.c_str(),
                         totalTmpBuffOffset.c_str());
             }
 

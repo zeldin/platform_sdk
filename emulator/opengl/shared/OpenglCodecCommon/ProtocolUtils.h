@@ -8,6 +8,61 @@
 
 namespace emugl {
 
+#ifdef __BIG_ENDIAN__
+template<class T> static inline T swap64(const T& n)
+{
+  union { T a; uint64_t b; } v;
+  v.b = __builtin_bswap64(*(uint64_t *)&n);
+  return v.a;
+}
+
+template<class T> static inline T swap32(const T& n)
+{
+  union { T a; uint32_t b; } v;
+  v.b = __builtin_bswap32(*(uint32_t *)&n);
+  return v.a;
+}
+
+template<class T> static inline T swap16(const T& n)
+{
+  union { T a; uint16_t b; } v;
+  v.b = __builtin_bswap16(*(uint16_t *)&n);
+  return v.a;
+}
+
+template<class T> static inline T swap(T n)
+{
+  if(sizeof(T)==8) return swap64(n);
+  else if(sizeof(T)==4) return swap32(n);
+  else if(sizeof(T)==2) return swap16(n);
+  else return n;
+}
+
+template<class T> static inline void swap_in_place(T& n)
+{
+  n = swap(n);
+}
+
+template<class T> static inline void swap_array(T* a, size_t sz)
+{
+  if(sizeof(T)>1 && sz>0) {
+    sz /= sizeof(T);
+    while(sz--) swap_in_place(*a++);
+  }
+}
+
+template<class T> static inline void swap_array(const T* a, size_t sz)
+{
+  swap_array((T*)a, sz);
+}
+
+static inline void swap_array(void *a, size_t sz)
+{}
+
+static inline void swap_array(const void *a, size_t sz)
+{}
+#endif
+
 // Helper macro
 #define COMPILE_ASSERT(cond)  static char kAssert##__LINE__[1 - 2 * !(cond)] __attribute__((unused)) = { 0 }
 
